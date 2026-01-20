@@ -35,6 +35,8 @@ Download the appropriate binary for your platform:
 | `-user` | MQTT username | (empty) |
 | `-pass` | MQTT password | (empty) |
 | `-passfile` | Path to file containing MQTT password (overrides `-pass`) | (empty) |
+| `-clientid` | MQTT client ID | `serial2mqtt-<hostname>-<pid>` |
+| `-qos` | MQTT QoS level (0, 1, or 2) | `0` |
 
 > [!NOTE]
 > Command line flags override values found in the configuration file.
@@ -48,7 +50,9 @@ Download the appropriate binary for your platform:
      "baud": 2400,
      "broker": "tcp://192.168.1.50:1883",
      "user": "my_user",
-     "password": "my_password"
+     "password": "my_password",
+     "client_id": "my-bridge",
+     "qos": 1
    }
    ```
 
@@ -93,3 +97,93 @@ GOOS=linux GOARCH=amd64 go build -o serial2mqtt-amd64
 ```bash
 GOOS=linux GOARCH=arm64 go build -o serial2mqtt-arm64
 ```
+
+## Running as a systemd Service
+
+The application includes native systemd integration with readiness notification and watchdog support.
+
+### Installation
+
+1. Copy the binary to a system location:
+   ```bash
+   sudo cp serial2mqtt /usr/local/bin/
+   sudo chmod +x /usr/local/bin/serial2mqtt
+   ```
+
+2. Create a configuration file:
+   ```bash
+   sudo mkdir -p /etc/serial2mqtt
+   sudo nano /etc/serial2mqtt/config.json
+   ```
+
+3. (Optional) Create a password file with restricted permissions:
+   ```bash
+   echo "your_mqtt_password" | sudo tee /etc/serial2mqtt/mqtt.pass
+   sudo chmod 600 /etc/serial2mqtt/mqtt.pass
+   ```
+
+4. Add your user to the `dialout` group for serial port access (or run as root):
+   ```bash
+   sudo usermod -aG dialout serial2mqtt
+   ```
+
+### Unit File
+
+Create `/etc/systemd/system/serial2mqtt.service`:
+
+```ini
+[Unit]
+Description=Serial to MQTT Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/serial2mqtt -config /etc/serial2mqtt/config.json -passfile /etc/serial2mqtt/mqtt.pass
+Restart=on-failure
+RestartSec=5
+
+# Watchdog: service must send keep-alive within this interval
+WatchdogSec=30
+
+# Security hardening
+User=serial2mqtt
+Group=dialout
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+ReadWritePaths=/dev
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Create Service User
+
+```bash
+sudo useradd -r -s /usr/sbin/nologin -G dialout serial2mqtt
+```
+
+### Enable and Start
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable serial2mqtt
+sudo systemctl start serial2mqtt
+```
+
+### Monitoring
+
+```bash
+# View logs
+journalctl -u serial2mqtt -f
+
+# Check status
+systemctl status serial2mqtt
+```
+
+### Watchdog Behavior
+
+When `WatchdogSec` is configured, the application automatically sends keep-alive notifications to systemd. If the application becomes unresponsive (e.g., deadlock), systemd will restart it after the watchdog timeout expires.

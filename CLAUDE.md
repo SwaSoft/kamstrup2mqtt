@@ -27,7 +27,7 @@ This is a single-file Go application (`main.go`) that bridges serial port data t
 
 **FrameParser** - State machine that reconstructs length-encoded binary frames from a serial byte stream. Frames are delimited by `0x7E` with a 12-bit length field in bytes 1-2. The parser handles resynchronization when unexpected delimiters appear mid-frame.
 
-**Main loop** - Runs serial reading in a goroutine with exponential backoff reconnection. A separate ticker monitors for inactivity (no valid frames for 60 seconds).
+**Main loop** - Runs serial reading in a goroutine with exponential backoff reconnection. Uses `context.Context` for coordinated shutdown. A separate ticker monitors for inactivity (no valid frames for 60 seconds) and sends systemd watchdog notifications when enabled.
 
 ### Frame Protocol
 
@@ -49,3 +49,12 @@ This is a single-file Go application (`main.go`) that bridges serial port data t
 
 - `github.com/eclipse/paho.mqtt.golang` - MQTT client
 - `github.com/tarm/serial` - Serial port handling
+- `github.com/coreos/go-systemd/v22/daemon` - systemd notify/watchdog support
+
+### Systemd Integration
+
+When running under systemd with `Type=notify`, the application:
+- Sends `READY=1` after MQTT connection is established
+- Sends `STOPPING=1` on shutdown
+- Sends `WATCHDOG=1` periodically when `WatchdogSec` is configured
+- Automatically disables log timestamps (journald provides them)
