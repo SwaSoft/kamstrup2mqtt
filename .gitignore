@@ -1,0 +1,23 @@
+# Build artifacts
+serial2mqtt
+serial2mqtt-*
+
+# Test artifacts
+*.test
+coverage.out
+coverage.html
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config files with secrets (keep examples only)
+config.json
+*.pass
