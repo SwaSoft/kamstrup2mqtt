@@ -107,9 +107,9 @@ func (p *FrameParser) ProcessByte(b byte) ([]byte, error) {
 	p.frameBuffer = append(p.frameBuffer, b)
 	p.byteCounter++
 
-	// Check for early start delimiter (Resynchronization)
+	// Handle delimiters
 	if b == Delimiter {
-		// If we are at the expected end, handle naturally
+		// Valid end?
 		if p.expectedPacketSize > 0 && p.byteCounter == p.expectedPacketSize {
 			// Return a copy to avoid buffer reuse issues
 			frame := make([]byte, len(p.frameBuffer))
@@ -117,13 +117,18 @@ func (p *FrameParser) ProcessByte(b byte) ([]byte, error) {
 			p.Reset()
 			return frame, nil
 		}
-		// Otherwise, it's an early/unexpected delimiter, treat as start of new frame
-		oldCounter := p.byteCounter
-		p.Reset()
-		p.frameStarted = true
-		p.frameBuffer = append(p.frameBuffer[:0], b)
-		p.byteCounter = 1
-		return nil, fmt.Errorf("malformed frame: unexpected delimiter at index %d, starting new frame", oldCounter-1)
+
+		// Redundant start or early sync (only before length is reliable)
+		if p.byteCounter < 3 {
+			p.Reset()
+			p.frameStarted = true
+			p.frameBuffer = append(p.frameBuffer[:0], b)
+			p.byteCounter = 1
+			return nil, nil // Silent resync for redundant starts
+		}
+
+		// If byteCounter >= 3 and not at the end, we treat it as payload data.
+		// Delimiters are valid in binary payloads as long as the length allows.
 	}
 
 	// Length Determination
@@ -138,11 +143,11 @@ func (p *FrameParser) ProcessByte(b byte) ([]byte, error) {
 		}
 	}
 
-	// Frame Completion
+	// Frame Completion (for non-delimiter bytes at the expected end)
 	if p.expectedPacketSize > 0 && p.byteCounter == p.expectedPacketSize {
-		// If we reach here, b != Delimiter because we checked for it at the start of the function
+		// If we reach here, b != Delimiter (checked above)
 		p.Reset()
-		return nil, fmt.Errorf("malformed frame: last byte is 0x%02X not 0x%02X", b, Delimiter)
+		return nil, fmt.Errorf("malformed frame: last byte at index %d is 0x%02X not 0x%02X", p.byteCounter-1, b, Delimiter)
 	}
 
 	return nil, nil
