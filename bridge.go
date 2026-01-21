@@ -21,11 +21,12 @@ const (
 	SerialReadBufSize = 256
 )
 
-// Bridge encapsulates the serial-to-MQTT bridging logic.
+// Bridge encapsulates the serial-to-MQTT bridging logic (Imperative Shell).
 type Bridge struct {
 	config                Config
 	mqtt                  mqtt.Client
 	parser                *FrameParser
+	logic                 *BridgeLogic
 	lastActivity          atomic.Int64
 	lastInactivityWarning time.Time
 	watchdogEnabled       bool
@@ -38,6 +39,7 @@ func NewBridge(cfg Config, client mqtt.Client) *Bridge {
 		config: cfg,
 		mqtt:   client,
 		parser: NewFrameParser(),
+		logic:  NewBridgeLogic(InactivityTimeout),
 	}
 	b.lastActivity.Store(time.Now().UnixNano())
 
@@ -55,10 +57,7 @@ func (b *Bridge) Start(ctx context.Context, sigChan chan os.Signal) {
 	serialDone := make(chan struct{})
 	go b.runSerialLoop(ctx, serialDone)
 
-	tickerInterval := 1 * time.Second
-	if b.watchdogEnabled && b.watchdogInterval/2 > 0 && b.watchdogInterval/2 < tickerInterval {
-		tickerInterval = b.watchdogInterval / 2
-	}
+	tickerInterval := b.logic.CalculateTickerInterval(b.watchdogEnabled, b.watchdogInterval, 1*time.Second)
 	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
 
@@ -188,12 +187,13 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 }
 
 func (b *Bridge) checkInactivity() {
-	lastActivityTime := time.Unix(0, b.lastActivity.Load())
-	if time.Since(lastActivityTime) > InactivityTimeout {
-		if time.Since(b.lastInactivityWarning) > InactivityTimeout {
-			log.Printf("Warning: No valid frame published to %s for more than %v", b.config.Topic, InactivityTimeout)
-			b.lastInactivityWarning = time.Now()
-		}
+	now := time.Now()
+	lastActivity := time.Unix(0, b.lastActivity.Load())
+
+	shouldWarn, nextWarning := b.logic.ShouldWarnInactivity(lastActivity, b.lastInactivityWarning, now)
+	if shouldWarn {
+		log.Printf("Warning: No valid frame published to %s for more than %v", b.config.Topic, InactivityTimeout)
+		b.lastInactivityWarning = nextWarning
 	}
 }
 
