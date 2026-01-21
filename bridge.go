@@ -95,7 +95,7 @@ func (b *Bridge) runSerialLoop(ctx context.Context, done chan struct{}) {
 		default:
 		}
 
-		if firstAttempt || backoff > 1*time.Second {
+		if b.logic.ShouldLogSerialOpen(firstAttempt, backoff) {
 			log.Printf("Opening serial port %s at %d baud", b.config.Device, b.config.Baud)
 		}
 
@@ -107,10 +107,7 @@ func (b *Bridge) runSerialLoop(ctx context.Context, done chan struct{}) {
 			case <-ctx.Done():
 				return
 			case <-time.After(backoff):
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
+				backoff = b.logic.CalculateBackoff(backoff, maxBackoff)
 				continue
 			}
 		}

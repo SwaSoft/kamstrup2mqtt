@@ -6,7 +6,7 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
+	cfg := DefaultConfig("test-host", 1234)
 	if cfg.Device != "/dev/ttyUSB0" {
 		t.Errorf("expected default device /dev/ttyUSB0, got %s", cfg.Device)
 	}
@@ -101,8 +101,15 @@ func TestBuildConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig defaults: %v", err)
 	}
-	defaultCfg := DefaultConfig()
-	if cfg2.Device != defaultCfg.Device {
+	// We need to re-fetch hostname/pid for cfg2 because buildConfig uses real os.Hostname()
+	realHost, _ := os.Hostname()
+	if realHost == "" {
+		realHost = "unknown"
+	}
+	realPid := os.Getpid()
+	realDefault := DefaultConfig(realHost, realPid)
+
+	if cfg2.Device != realDefault.Device {
 		t.Errorf("expected default device, got %s", cfg2.Device)
 	}
 

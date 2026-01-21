@@ -78,3 +78,67 @@ func TestShouldWarnInactivity(t *testing.T) {
 		t.Errorf("Expected new warning time to be %v, got %v", now, newWarning)
 	}
 }
+
+func TestCalculateBackoff(t *testing.T) {
+	logic := NewBridgeLogic(60 * time.Second)
+	max := 64 * time.Second
+
+	tests := []struct {
+		current  time.Duration
+		expected time.Duration
+	}{
+		{1 * time.Second, 2 * time.Second},
+		{2 * time.Second, 4 * time.Second},
+		{32 * time.Second, 64 * time.Second},
+		{64 * time.Second, 64 * time.Second},
+	}
+
+	for _, tt := range tests {
+		got := logic.CalculateBackoff(tt.current, max)
+		if got != tt.expected {
+			t.Errorf("CalculateBackoff(%v) = %v, want %v", tt.current, got, tt.expected)
+		}
+	}
+}
+
+func TestShouldLogSerialOpen(t *testing.T) {
+	logic := NewBridgeLogic(60 * time.Second)
+
+	tests := []struct {
+		firstAttempt bool
+		backoff      time.Duration
+		expected     bool
+	}{
+		{true, 1 * time.Second, true},
+		{false, 1 * time.Second, false},
+		{false, 2 * time.Second, true},
+		{true, 2 * time.Second, true},
+	}
+
+	for _, tt := range tests {
+		got := logic.ShouldLogSerialOpen(tt.firstAttempt, tt.backoff)
+		if got != tt.expected {
+			t.Errorf("ShouldLogSerialOpen(%v, %v) = %v, want %v", tt.firstAttempt, tt.backoff, got, tt.expected)
+		}
+	}
+}
+
+func TestMergeConfigs(t *testing.T) {
+	logic := NewBridgeLogic(60 * time.Second)
+
+	base := Config{Device: "base", Baud: 115200, QoS: 0}
+	file := Config{Device: "file", Baud: 9600}
+	cli := Config{Device: "cli", QoS: 1}
+
+	// 1. File only overrides base
+	merged := logic.MergeConfigs(base, file, Config{QoS: -1})
+	if merged.Device != "file" || merged.Baud != 9600 || merged.QoS != 0 {
+		t.Errorf("MergeConfigs (file only) failed: %+v", merged)
+	}
+
+	// 2. CLI overrides both
+	merged = logic.MergeConfigs(base, file, cli)
+	if merged.Device != "cli" || merged.Baud != 9600 || merged.QoS != 1 {
+		t.Errorf("MergeConfigs (full) failed: %+v", merged)
+	}
+}
