@@ -97,6 +97,23 @@ GOOS=linux GOARCH=amd64 go build -o serial2mqtt-amd64
 GOOS=linux GOARCH=arm64 go build -o serial2mqtt-arm64
 ```
 
+## Testing
+
+Run all tests:
+```bash
+go test ./...
+```
+
+Run a specific test:
+```bash
+go test -run TestFrameParser_ValidFrame ./...
+```
+
+Run tests with verbose output:
+```bash
+go test -v ./...
+```
+
 ## Running as a systemd Service
 
 The application includes native systemd integration with readiness notification and watchdog support.
@@ -115,13 +132,7 @@ The application includes native systemd integration with readiness notification 
    sudo nano /etc/serial2mqtt/config.json
    ```
 
-3. (Optional) Create a password file with restricted permissions:
-   ```bash
-   echo "your_mqtt_password" | sudo tee /etc/serial2mqtt/mqtt.pass
-   sudo chmod 600 /etc/serial2mqtt/mqtt.pass
-   ```
-
-4. Add your user to the `dialout` group for serial port access (or run as root):
+3. Add your user to the `dialout` group for serial port access (or run as root):
    ```bash
    sudo usermod -aG dialout serial2mqtt
    ```
@@ -138,7 +149,7 @@ Wants=network-online.target
 
 [Service]
 Type=notify
-ExecStart=/usr/local/bin/serial2mqtt -config /etc/serial2mqtt/config.json -passfile /etc/serial2mqtt/mqtt.pass
+ExecStart=/usr/local/bin/serial2mqtt -config /etc/serial2mqtt/config.json
 Restart=on-failure
 RestartSec=5
 
