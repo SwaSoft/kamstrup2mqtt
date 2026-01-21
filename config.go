@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config holds all application settings.
@@ -41,7 +42,24 @@ func LoadConfig(path string) (Config, error) {
 	return config, err
 }
 
-func buildConfig(configPath, device string, baud int, broker, topic, user, pass, clientID string, qos int) (Config, error) {
+// LoadCredentials reads MQTT username and password from a file.
+// The file format is two lines: username on first line, password on second.
+// This supports systemd's LoadCredential directive for secure credential management.
+func LoadCredentials(path string) (user, password string, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read credentials file: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) < 2 {
+		return "", "", fmt.Errorf("credentials file must contain username and password on separate lines")
+	}
+
+	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), nil
+}
+
+func buildConfig(configPath, credfilePath, device string, baud int, broker, topic, user, pass, clientID string, qos int) (Config, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "unknown"
@@ -59,6 +77,16 @@ func buildConfig(configPath, device string, baud int, broker, topic, user, pass,
 		}
 	}
 
+	var credCfg Config
+	if credfilePath != "" {
+		credUser, credPass, err := LoadCredentials(credfilePath)
+		if err != nil {
+			return base, fmt.Errorf("error loading credentials: %v", err)
+		}
+		credCfg.User = credUser
+		credCfg.Password = credPass
+	}
+
 	cliFlags := Config{
 		Device:   device,
 		Baud:     baud,
@@ -71,7 +99,7 @@ func buildConfig(configPath, device string, baud int, broker, topic, user, pass,
 	}
 
 	logic := NewBridgeLogic(0) // InactivityTimeout not needed for merging
-	cfg := logic.MergeConfigs(base, fileCfg, cliFlags)
+	cfg := logic.MergeConfigs(base, fileCfg, credCfg, cliFlags)
 
 	if err := logic.ValidateConfig(cfg); err != nil {
 		return cfg, err

@@ -52,60 +52,37 @@ func (l *BridgeLogic) ShouldLogSerialOpen(firstAttempt bool, currentBackoff time
 	return firstAttempt || currentBackoff > 1*time.Second
 }
 
-// MergeConfigs applies overrides (cli then file) to a base configuration.
-func (l *BridgeLogic) MergeConfigs(base, fileConfig, cliFlags Config) Config {
+// MergeConfigs applies overrides to a base configuration in order.
+// Later configs take precedence over earlier ones.
+// For QoS, -1 is treated as "not set" and won't override.
+func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 	cfg := base
 
-	// Apply file overrides
-	if fileConfig.Device != "" {
-		cfg.Device = fileConfig.Device
-	}
-	if fileConfig.Baud != 0 {
-		cfg.Baud = fileConfig.Baud
-	}
-	if fileConfig.Broker != "" {
-		cfg.Broker = fileConfig.Broker
-	}
-	if fileConfig.Topic != "" {
-		cfg.Topic = fileConfig.Topic
-	}
-	if fileConfig.User != "" {
-		cfg.User = fileConfig.User
-	}
-	if fileConfig.Password != "" {
-		cfg.Password = fileConfig.Password
-	}
-	if fileConfig.ClientID != "" {
-		cfg.ClientID = fileConfig.ClientID
-	}
-	if fileConfig.QoS != 0 {
-		cfg.QoS = fileConfig.QoS
-	}
-
-	// Apply CLI overrides
-	if cliFlags.Device != "" {
-		cfg.Device = cliFlags.Device
-	}
-	if cliFlags.Baud != 0 {
-		cfg.Baud = cliFlags.Baud
-	}
-	if cliFlags.Broker != "" {
-		cfg.Broker = cliFlags.Broker
-	}
-	if cliFlags.Topic != "" {
-		cfg.Topic = cliFlags.Topic
-	}
-	if cliFlags.User != "" {
-		cfg.User = cliFlags.User
-	}
-	if cliFlags.Password != "" {
-		cfg.Password = cliFlags.Password
-	}
-	if cliFlags.ClientID != "" {
-		cfg.ClientID = cliFlags.ClientID
-	}
-	if cliFlags.QoS != -1 { // -1 is our "not set" sentinel for QoS CLI flag
-		cfg.QoS = cliFlags.QoS
+	for _, override := range overrides {
+		if override.Device != "" {
+			cfg.Device = override.Device
+		}
+		if override.Baud != 0 {
+			cfg.Baud = override.Baud
+		}
+		if override.Broker != "" {
+			cfg.Broker = override.Broker
+		}
+		if override.Topic != "" {
+			cfg.Topic = override.Topic
+		}
+		if override.User != "" {
+			cfg.User = override.User
+		}
+		if override.Password != "" {
+			cfg.Password = override.Password
+		}
+		if override.ClientID != "" {
+			cfg.ClientID = override.ClientID
+		}
+		if override.QoS != 0 && override.QoS != -1 {
+			cfg.QoS = override.QoS
+		}
 	}
 
 	return cfg

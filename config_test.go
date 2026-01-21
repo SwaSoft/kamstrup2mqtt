@@ -61,6 +61,7 @@ func TestBuildConfig(t *testing.T) {
 	// Test case: flags should override file
 	cfg, err := buildConfig(
 		tmpFile.Name(),     // config file
+		"",                 // credfile (empty)
 		"/dev/flag-device", // device flag
 		9600,               // baud flag
 		"",                 // broker (empty, should use default or file)
@@ -97,7 +98,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: defaults when no file or flags
-	cfg2, err := buildConfig("", "", 0, "", "", "", "", "", -1)
+	cfg2, err := buildConfig("", "", "", 0, "", "", "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig defaults: %v", err)
 	}
@@ -114,13 +115,13 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: Error on missing config file
-	_, err = buildConfig("missing-file.json", "", 0, "", "", "", "", "", -1)
+	_, err = buildConfig("missing-file.json", "", "", 0, "", "", "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for missing config file, got nil")
 	}
 
 	// Test case: Error on invalid QoS
-	_, err = buildConfig("", "", 0, "", "", "", "", "", 5)
+	_, err = buildConfig("", "", "", 0, "", "", "", "", "", 5)
 	if err == nil {
 		t.Error("expected error for invalid QoS, got nil")
 	}
@@ -147,7 +148,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 	tmpFile2.Close()
 
-	cfg3, err := buildConfig(tmpFile2.Name(), "", 0, "", "", "", "", "", -1)
+	cfg3, err := buildConfig(tmpFile2.Name(), "", "", 0, "", "", "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig with all fields: %v", err)
 	}
@@ -155,5 +156,156 @@ func TestBuildConfig(t *testing.T) {
 		cfg3.Topic != "file/topic" || cfg3.User != "file-user" || cfg3.Password != "file-password" ||
 		cfg3.ClientID != "file-client" || cfg3.QoS != 2 {
 		t.Errorf("config with all file fields mismatch: %+v", cfg3)
+	}
+}
+
+func TestLoadCredentials(t *testing.T) {
+	// Test valid credentials file
+	tmpFile, err := os.CreateTemp("", "creds*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.Write([]byte("testuser\ntestpass")); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	user, pass, err := LoadCredentials(tmpFile.Name())
+	if err != nil {
+		t.Errorf("unexpected error loading credentials: %v", err)
+	}
+	if user != "testuser" {
+		t.Errorf("expected user 'testuser', got '%s'", user)
+	}
+	if pass != "testpass" {
+		t.Errorf("expected password 'testpass', got '%s'", pass)
+	}
+
+	// Test missing file
+	_, _, err = LoadCredentials("non-existent-creds.txt")
+	if err == nil {
+		t.Error("expected error for non-existent credentials file")
+	}
+
+	// Test invalid format (single line)
+	tmpFile2, err := os.CreateTemp("", "creds_invalid*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile2.Name())
+
+	if _, err := tmpFile2.Write([]byte("onlyuser")); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile2.Close()
+
+	_, _, err = LoadCredentials(tmpFile2.Name())
+	if err == nil {
+		t.Error("expected error for single-line credentials file")
+	}
+
+	// Test whitespace trimming
+	tmpFile3, err := os.CreateTemp("", "creds_whitespace*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile3.Name())
+
+	if _, err := tmpFile3.Write([]byte("  spaceduser  \n  spacedpass  \n")); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile3.Close()
+
+	user, pass, err = LoadCredentials(tmpFile3.Name())
+	if err != nil {
+		t.Errorf("unexpected error loading credentials with whitespace: %v", err)
+	}
+	if user != "spaceduser" {
+		t.Errorf("expected trimmed user 'spaceduser', got '%s'", user)
+	}
+	if pass != "spacedpass" {
+		t.Errorf("expected trimmed password 'spacedpass', got '%s'", pass)
+	}
+
+	// Test password with special characters (including colons)
+	tmpFile4, err := os.CreateTemp("", "creds_special*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile4.Name())
+
+	if _, err := tmpFile4.Write([]byte("user@domain.com\npass:with:colons!@#$")); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile4.Close()
+
+	user, pass, err = LoadCredentials(tmpFile4.Name())
+	if err != nil {
+		t.Errorf("unexpected error loading credentials with special chars: %v", err)
+	}
+	if user != "user@domain.com" {
+		t.Errorf("expected user 'user@domain.com', got '%s'", user)
+	}
+	if pass != "pass:with:colons!@#$" {
+		t.Errorf("expected password 'pass:with:colons!@#$', got '%s'", pass)
+	}
+}
+
+func TestCredfilePriority(t *testing.T) {
+	// Create a config file with user/pass
+	configFile, err := os.CreateTemp("", "config*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(configFile.Name())
+
+	configContent := `{"user": "config-user", "password": "config-pass"}`
+	if _, err := configFile.Write([]byte(configContent)); err != nil {
+		t.Fatal(err)
+	}
+	configFile.Close()
+
+	// Create a credentials file
+	credFile, err := os.CreateTemp("", "creds*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(credFile.Name())
+
+	if _, err := credFile.Write([]byte("cred-user\ncred-pass")); err != nil {
+		t.Fatal(err)
+	}
+	credFile.Close()
+
+	// Test: credfile should override config.json
+	cfg, err := buildConfig(configFile.Name(), credFile.Name(), "", 0, "", "", "", "", "", -1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.User != "cred-user" {
+		t.Errorf("expected credfile user 'cred-user', got '%s'", cfg.User)
+	}
+	if cfg.Password != "cred-pass" {
+		t.Errorf("expected credfile password 'cred-pass', got '%s'", cfg.Password)
+	}
+
+	// Test: CLI flags should override credfile
+	cfg2, err := buildConfig(configFile.Name(), credFile.Name(), "", 0, "", "", "cli-user", "cli-pass", "", -1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg2.User != "cli-user" {
+		t.Errorf("expected CLI user 'cli-user', got '%s'", cfg2.User)
+	}
+	if cfg2.Password != "cli-pass" {
+		t.Errorf("expected CLI password 'cli-pass', got '%s'", cfg2.Password)
+	}
+
+	// Test: error on missing credfile
+	_, err = buildConfig("", "missing-creds.txt", "", 0, "", "", "", "", "", -1)
+	if err == nil {
+		t.Error("expected error for missing credentials file")
 	}
 }

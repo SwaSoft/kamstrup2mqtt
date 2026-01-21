@@ -28,6 +28,7 @@ Download the appropriate binary for your platform:
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-config` | Path to configuration file (JSON) | (empty) |
+| `-credfile` | Path to credentials file (username and password on separate lines) | (empty) |
 | `-device` | Serial device path | `/dev/ttyUSB0` |
 | `-baud` | Serial baud rate | `2400` |
 | `-broker` | MQTT broker address | `tcp://localhost:1883` |
@@ -37,8 +38,16 @@ Download the appropriate binary for your platform:
 | `-clientid` | MQTT client ID | `serial2mqtt-<hostname>-<pid>` |
 | `-qos` | MQTT QoS level (0, 1, or 2) | `0` |
 
-> [!NOTE]
-> Command line flags override values found in the configuration file.
+### Configuration Priority
+
+Configuration values are applied in the following order (highest priority last):
+
+1. Defaults
+2. JSON config file (`-config`)
+3. Credentials file (`-credfile`)
+4. Command-line flags (`-user`, `-pass`, etc.)
+
+This means CLI flags always win, credentials file overrides the JSON config, and the JSON config overrides defaults.
 
 ### Example
 
@@ -64,6 +73,25 @@ Download the appropriate binary for your platform:
    ```bash
    ./serial2mqtt -config config.json -device /dev/ttyUSB0
    ```
+
+### Using Credentials File
+
+For secure credential management (especially with systemd), you can use a separate credentials file:
+
+1. Create a credentials file with username on the first line and password on the second:
+   ```
+   my_mqtt_user
+   my_mqtt_password
+   ```
+
+2. Run the bridge with the credentials file:
+   ```bash
+   ./serial2mqtt -config config.json -credfile /path/to/credentials
+   ```
+
+The credentials file format supports:
+- Passwords with special characters (including colons)
+- Leading/trailing whitespace is trimmed from both lines
 
 ## Protocol Definition
 
@@ -169,6 +197,34 @@ ReadWritePaths=/dev
 [Install]
 WantedBy=multi-user.target
 ```
+
+### Secure Credentials with LoadCredential
+
+For enhanced security, use systemd's `LoadCredential` directive to manage MQTT credentials separately from the main configuration:
+
+1. Create a credentials file:
+   ```bash
+   sudo mkdir -p /etc/serial2mqtt
+   sudo nano /etc/serial2mqtt/mqtt.credentials
+   # Add username on first line, password on second line
+   sudo chmod 600 /etc/serial2mqtt/mqtt.credentials
+   ```
+
+2. Update the unit file to use `LoadCredential`:
+   ```ini
+   [Service]
+   Type=notify
+   LoadCredential=mqtt-creds:/etc/serial2mqtt/mqtt.credentials
+   ExecStart=/usr/local/bin/serial2mqtt \
+       -config /etc/serial2mqtt/config.json \
+       -credfile ${CREDENTIALS_DIRECTORY}/mqtt-creds
+   ```
+
+This approach:
+- Keeps credentials separate from the JSON config file
+- Allows credentials to be stored with restricted permissions (600)
+- Credentials are only accessible to the service process via `CREDENTIALS_DIRECTORY`
+- Works seamlessly with secret management tools that populate credential files
 
 ### Create Service User
 
