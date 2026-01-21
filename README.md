@@ -34,7 +34,6 @@ Download the appropriate binary for your platform:
 | `-topic` | MQTT topic | `serial/bridge` |
 | `-user` | MQTT username | (empty) |
 | `-pass` | MQTT password | (empty) |
-| `-passfile` | Path to file containing MQTT password (overrides `-pass`) | (empty) |
 | `-clientid` | MQTT client ID | `serial2mqtt-<hostname>-<pid>` |
 | `-qos` | MQTT QoS level (0, 1, or 2) | `0` |
 

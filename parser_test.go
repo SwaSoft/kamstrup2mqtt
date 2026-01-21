@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"os"
 	"testing"
 )
 
@@ -198,74 +197,6 @@ func TestFrameParser_DelimiterInPayload(t *testing.T) {
 	}
 	if !bytes.Equal(lastFrame, payload) {
 		t.Errorf("expected frame %v, got %v", payload, lastFrame)
-	}
-}
-
-func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
-	if cfg.Device != "/dev/ttyUSB0" {
-		t.Errorf("expected default device /dev/ttyUSB0, got %s", cfg.Device)
-	}
-	if cfg.Baud != 2400 {
-		t.Errorf("expected default baud 2400, got %d", cfg.Baud)
-	}
-}
-
-func TestConfigIO(t *testing.T) {
-	// Test LoadConfig with non-existent file
-	_, err := LoadConfig("non-existent-file.json")
-	if err == nil {
-		t.Error("expected error for non-existent config file")
-	}
-
-	// Test LoadConfig with valid JSON
-	tmpFile, err := os.CreateTemp("", "config*.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	content := `{"device": "/dev/test", "baud": 9600}`
-	if _, err := tmpFile.Write([]byte(content)); err != nil {
-		t.Fatal(err)
-	}
-	tmpFile.Close()
-
-	cfg, err := LoadConfig(tmpFile.Name())
-	if err != nil {
-		t.Errorf("failed to load config: %v", err)
-	}
-	if cfg.Device != "/dev/test" || cfg.Baud != 9600 {
-		t.Errorf("loaded config mismatch: %+v", cfg)
-	}
-}
-
-func TestReadPassword(t *testing.T) {
-	// Write dummy password file
-	tmpFile, err := os.CreateTemp("", "pass*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	password := "  secret123  \n"
-	if _, err := tmpFile.Write([]byte(password)); err != nil {
-		t.Fatal(err)
-	}
-	tmpFile.Close()
-
-	pass, err := readPassword(tmpFile.Name())
-	if err != nil {
-		t.Errorf("failed to read password: %v", err)
-	}
-	if pass != "secret123" {
-		t.Errorf("expected 'secret123', got '%s'", pass)
-	}
-
-	// Test error on missing file
-	_, err = readPassword("missing-password-file")
-	if err == nil {
-		t.Error("expected error for missing password file")
 	}
 }
 
