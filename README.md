@@ -135,6 +135,38 @@ GOOS=linux GOARCH=amd64 go build -o kamstrup2mqtt-amd64
 GOOS=linux GOARCH=arm64 go build -o kamstrup2mqtt-arm64
 ```
 
+Or use the Makefile:
+```bash
+make build-cross
+```
+
+### Building Debian Packages
+
+To build `.deb` packages for both amd64 and arm64:
+
+**Prerequisites:**
+- Go 1.22+
+- `dpkg-deb` (part of the `dpkg` package, included on Debian/Ubuntu systems)
+
+**Build the packages:**
+```bash
+make deb
+```
+
+This will:
+1. Cross-compile binaries for both amd64 and arm64
+2. Create `dist/kamstrup2mqtt_<version>_amd64.deb`
+3. Create `dist/kamstrup2mqtt_<version>_arm64.deb`
+
+The version is derived from git tags (e.g., `v1.0.0`) or the commit hash if no tags exist.
+
+**Build everything (tarball + deb packages):**
+```bash
+make package
+```
+
+This additionally creates a `dist/kamstrup2mqtt-<version>.tar.gz` tarball containing both binaries and the manual installation script.
+
 ## Testing
 
 Run all tests:
