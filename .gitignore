@@ -1,7 +1,6 @@
 # Build artifacts
 dist/
-serial2mqtt
-serial2mqtt-*
+kamstrup2mqtt-*
 
 # Test artifacts
 *.test
