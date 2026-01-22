@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"sync/atomic"
 	"time"
@@ -16,10 +17,24 @@ import (
 
 // Bridge-related constants
 const (
-	InactivityTimeout = 60 * time.Second
-	MQTTConnTimeout   = 30 * time.Second
-	SerialReadBufSize = 256
+	InactivityTimeout    = 60 * time.Second
+	MQTTConnTimeout      = 30 * time.Second
+	SerialReadBufSize    = 256
+	MetricsDumpInterval  = 24 * time.Hour
 )
+
+// Metrics tracks operational statistics for the bridge.
+type Metrics struct {
+	framesPublished  atomic.Uint64
+	parseErrors      atomic.Uint64
+	bytesReceived    atomic.Uint64
+	serialReconnects atomic.Uint64
+	mqttPublishFails atomic.Uint64
+	frameSizeMin     atomic.Uint64
+	frameSizeMax     atomic.Uint64
+	frameSizeTotal   atomic.Uint64
+	startTime        time.Time
+}
 
 // Bridge encapsulates the serial-to-MQTT bridging logic (Imperative Shell).
 type Bridge struct {
@@ -31,17 +46,23 @@ type Bridge struct {
 	lastInactivityWarning time.Time
 	watchdogEnabled       bool
 	watchdogInterval      time.Duration
+	metrics               Metrics
+	lastMetricsDump       time.Time
 }
 
 // NewBridge creates a new Bridge instance.
 func NewBridge(cfg Config, client mqtt.Client) *Bridge {
+	now := time.Now()
 	b := &Bridge{
-		config: cfg,
-		mqtt:   client,
-		parser: NewFrameParser(),
-		logic:  NewBridgeLogic(InactivityTimeout),
+		config:          cfg,
+		mqtt:            client,
+		parser:          NewFrameParser(),
+		logic:           NewBridgeLogic(InactivityTimeout),
+		lastMetricsDump: now,
 	}
-	b.lastActivity.Store(time.Now().UnixNano())
+	b.lastActivity.Store(now.UnixNano())
+	b.metrics.startTime = now
+	b.metrics.frameSizeMin.Store(math.MaxUint64)
 
 	wi, err := daemon.SdWatchdogEnabled(false)
 	b.watchdogEnabled = err == nil && wi > 0
@@ -65,6 +86,7 @@ func (b *Bridge) Start(ctx context.Context, sigChan chan os.Signal) {
 		select {
 		case s := <-sigChan:
 			log.Printf("Received signal %v, shutting down...", s)
+			b.logMetrics()
 			daemon.SdNotify(false, daemon.SdNotifyStopping)
 			return
 
@@ -73,6 +95,7 @@ func (b *Bridge) Start(ctx context.Context, sigChan chan os.Signal) {
 				daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 			}
 			b.checkInactivity()
+			b.checkMetricsDump()
 
 		case <-serialDone:
 			log.Println("Serial loop terminated unexpectedly")
@@ -102,6 +125,7 @@ func (b *Bridge) runSerialLoop(ctx context.Context, done chan struct{}) {
 		sc := &serial.Config{Name: b.config.Device, Baud: 2400, ReadTimeout: 15 * time.Second}
 		s, err := serial.OpenPort(sc)
 		if err != nil {
+			b.metrics.serialReconnects.Add(1)
 			log.Printf("Error opening serial port: %v. Retrying in %v...", err, backoff)
 			select {
 			case <-ctx.Done():
@@ -146,6 +170,9 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 		}
 
 		n, err := s.Read(buf)
+		if n > 0 {
+			b.metrics.bytesReceived.Add(uint64(n))
+		}
 		if err != nil {
 			if err == io.EOF {
 				if b.parser.frameStarted {
@@ -159,6 +186,7 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 		for i := 0; i < n; i++ {
 			frame, err := b.parser.ProcessByte(buf[i])
 			if err != nil {
+				b.metrics.parseErrors.Add(1)
 				if !firstErrorSilent {
 					log.Printf("Warning: %v, discarding", err)
 				}
@@ -170,8 +198,13 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 				firstErrorSilent = false
 				token := b.mqtt.Publish(b.config.Topic, byte(b.config.QoS), false, frame)
 				if token.Wait() && token.Error() != nil {
+					b.metrics.mqttPublishFails.Add(1)
 					log.Printf("Error publishing to MQTT: %v", token.Error())
 				} else {
+					frameSize := uint64(len(frame))
+					b.metrics.framesPublished.Add(1)
+					b.metrics.frameSizeTotal.Add(frameSize)
+					b.updateFrameSizeMinMax(frameSize)
 					if firstFrameLogNeeded {
 						log.Printf("First valid frame published to %s: %d bytes (operational)", b.config.Topic, len(frame))
 						firstFrameLogNeeded = false
@@ -192,6 +225,77 @@ func (b *Bridge) checkInactivity() {
 		log.Printf("Warning: No valid frame published to %s for more than %v", b.config.Topic, InactivityTimeout)
 		b.lastInactivityWarning = nextWarning
 	}
+}
+
+func (b *Bridge) updateFrameSizeMinMax(size uint64) {
+	for {
+		oldMin := b.metrics.frameSizeMin.Load()
+		if size >= oldMin || b.metrics.frameSizeMin.CompareAndSwap(oldMin, size) {
+			break
+		}
+	}
+	for {
+		oldMax := b.metrics.frameSizeMax.Load()
+		if size <= oldMax || b.metrics.frameSizeMax.CompareAndSwap(oldMax, size) {
+			break
+		}
+	}
+}
+
+func (b *Bridge) checkMetricsDump() {
+	if time.Since(b.lastMetricsDump) >= MetricsDumpInterval {
+		b.logMetrics()
+		b.lastMetricsDump = time.Now()
+	}
+}
+
+func (b *Bridge) logMetrics() {
+	uptime := time.Since(b.metrics.startTime)
+	framesPublished := b.metrics.framesPublished.Load()
+	parseErrors := b.metrics.parseErrors.Load()
+	bytesReceived := b.metrics.bytesReceived.Load()
+	serialReconnects := b.metrics.serialReconnects.Load()
+	mqttPublishFails := b.metrics.mqttPublishFails.Load()
+	frameSizeMin := b.metrics.frameSizeMin.Load()
+	frameSizeMax := b.metrics.frameSizeMax.Load()
+	frameSizeTotal := b.metrics.frameSizeTotal.Load()
+
+	var frameSizeStr string
+	if framesPublished > 0 {
+		avg := frameSizeTotal / framesPublished
+		if frameSizeMin == math.MaxUint64 {
+			frameSizeMin = 0
+		}
+		frameSizeStr = fmt.Sprintf("min=%d max=%d avg=%d", frameSizeMin, frameSizeMax, avg)
+	} else {
+		frameSizeStr = "no frames"
+	}
+
+	log.Printf("Daily metrics report:\n"+
+		"  Uptime: %s\n"+
+		"  Frames published: %d\n"+
+		"  Parse errors: %d\n"+
+		"  Bytes received: %d\n"+
+		"  Serial reconnections: %d\n"+
+		"  MQTT publish failures: %d\n"+
+		"  Frame sizes: %s",
+		formatDuration(uptime),
+		framesPublished,
+		parseErrors,
+		bytesReceived,
+		serialReconnects,
+		mqttPublishFails,
+		frameSizeStr)
+}
+
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%dh %dm %ds", h, m, s)
 }
 
 func initMQTT(cfg Config) (mqtt.Client, error) {
