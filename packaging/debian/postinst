@@ -19,8 +19,6 @@ case "$1" in
         # 2. Get values from debconf
         db_get kamstrup2mqtt/device
         DEVICE="$RET"
-        db_get kamstrup2mqtt/baud
-        BAUD="$RET"
         db_get kamstrup2mqtt/broker
         BROKER="$RET"
         db_get kamstrup2mqtt/topic
@@ -42,7 +40,6 @@ case "$1" in
         cat > "$CONFIG_FILE" <<EOF
 {
   "device": "$DEVICE",
-  "baud": $BAUD,
   "broker": "$BROKER",
   "topic": "$TOPIC",
   "client_id": "$CLIENT_ID",

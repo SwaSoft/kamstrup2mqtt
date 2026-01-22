@@ -10,9 +10,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Device != "/dev/ttyUSB0" {
 		t.Errorf("expected default device /dev/ttyUSB0, got %s", cfg.Device)
 	}
-	if cfg.Baud != 2400 {
-		t.Errorf("expected default baud 2400, got %d", cfg.Baud)
-	}
 }
 
 func TestConfigIO(t *testing.T) {
@@ -29,7 +26,7 @@ func TestConfigIO(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	content := `{"device": "/dev/test", "baud": 9600}`
+	content := `{"device": "/dev/test", "broker": "tcp://test:1883"}`
 	if _, err := tmpFile.Write([]byte(content)); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +36,7 @@ func TestConfigIO(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to load config: %v", err)
 	}
-	if cfg.Device != "/dev/test" || cfg.Baud != 9600 {
+	if cfg.Device != "/dev/test" || cfg.Broker != "tcp://test:1883" {
 		t.Errorf("loaded config mismatch: %+v", cfg)
 	}
 }
@@ -52,7 +49,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	content := `{"device": "/dev/file-device", "baud": 4800, "topic": "file/topic"}`
+	content := `{"device": "/dev/file-device", "topic": "file/topic"}`
 	if _, err := tmpFile.Write([]byte(content)); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +60,6 @@ func TestBuildConfig(t *testing.T) {
 		tmpFile.Name(),     // config file
 		"",                 // credfile (empty)
 		"/dev/flag-device", // device flag
-		9600,               // baud flag
 		"",                 // broker (empty, should use default or file)
 		"",                 // topic (empty, should use file)
 		"user",             // user flag
@@ -77,9 +73,6 @@ func TestBuildConfig(t *testing.T) {
 
 	if cfg.Device != "/dev/flag-device" {
 		t.Errorf("expected device flag /dev/flag-device, got %s", cfg.Device)
-	}
-	if cfg.Baud != 9600 {
-		t.Errorf("expected baud flag 9600, got %d", cfg.Baud)
 	}
 	if cfg.Topic != "file/topic" {
 		t.Errorf("expected topic from file file/topic, got %s", cfg.Topic)
@@ -98,7 +91,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: defaults when no file or flags
-	cfg2, err := buildConfig("", "", "", 0, "", "", "", "", "", -1)
+	cfg2, err := buildConfig("", "", "", "", "", "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig defaults: %v", err)
 	}
@@ -115,13 +108,13 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: Error on missing config file
-	_, err = buildConfig("missing-file.json", "", "", 0, "", "", "", "", "", -1)
+	_, err = buildConfig("missing-file.json", "", "", "", "", "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for missing config file, got nil")
 	}
 
 	// Test case: Error on invalid QoS
-	_, err = buildConfig("", "", "", 0, "", "", "", "", "", 5)
+	_, err = buildConfig("", "", "", "", "", "", "", "", 5)
 	if err == nil {
 		t.Error("expected error for invalid QoS, got nil")
 	}
@@ -135,7 +128,6 @@ func TestBuildConfig(t *testing.T) {
 
 	contentAll := `{
 		"device": "/dev/file",
-		"baud": 1200,
 		"broker": "tcp://file:1883",
 		"topic": "file/topic",
 		"user": "file-user",
@@ -148,11 +140,11 @@ func TestBuildConfig(t *testing.T) {
 	}
 	tmpFile2.Close()
 
-	cfg3, err := buildConfig(tmpFile2.Name(), "", "", 0, "", "", "", "", "", -1)
+	cfg3, err := buildConfig(tmpFile2.Name(), "", "", "", "", "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig with all fields: %v", err)
 	}
-	if cfg3.Device != "/dev/file" || cfg3.Baud != 1200 || cfg3.Broker != "tcp://file:1883" ||
+	if cfg3.Device != "/dev/file" || cfg3.Broker != "tcp://file:1883" ||
 		cfg3.Topic != "file/topic" || cfg3.User != "file-user" || cfg3.Password != "file-password" ||
 		cfg3.ClientID != "file-client" || cfg3.QoS != 2 {
 		t.Errorf("config with all file fields mismatch: %+v", cfg3)
@@ -280,7 +272,7 @@ func TestCredfilePriority(t *testing.T) {
 	credFile.Close()
 
 	// Test: credfile should override config.json
-	cfg, err := buildConfig(configFile.Name(), credFile.Name(), "", 0, "", "", "", "", "", -1)
+	cfg, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "", "", "", -1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -292,7 +284,7 @@ func TestCredfilePriority(t *testing.T) {
 	}
 
 	// Test: CLI flags should override credfile
-	cfg2, err := buildConfig(configFile.Name(), credFile.Name(), "", 0, "", "", "cli-user", "cli-pass", "", -1)
+	cfg2, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "cli-user", "cli-pass", "", -1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -304,7 +296,7 @@ func TestCredfilePriority(t *testing.T) {
 	}
 
 	// Test: error on missing credfile
-	_, err = buildConfig("", "missing-creds.txt", "", 0, "", "", "", "", "", -1)
+	_, err = buildConfig("", "missing-creds.txt", "", "", "", "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for missing credentials file")
 	}

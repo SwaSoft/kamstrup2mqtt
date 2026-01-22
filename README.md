@@ -40,7 +40,6 @@ The package will automatically:
 | `-config` | Path to configuration file (JSON) | (empty) |
 | `-credfile` | Path to credentials file (username and password on separate lines) | (empty) |
 | `-device` | Serial device path | `/dev/ttyUSB0` |
-| `-baud` | Serial baud rate | `2400` |
 | `-broker` | MQTT broker address | `tcp://localhost:1883` |
 | `-topic` | MQTT topic | `serial/bridge` |
 | `-user` | MQTT username | (empty) |
@@ -65,7 +64,6 @@ This means CLI flags always win, credentials file overrides the JSON config, and
    ```json
    {
      "device": "/dev/ttyUSB1",
-     "baud": 2400,
      "broker": "tcp://192.168.1.50:1883",
      "user": "my_user",
      "password": "my_password",

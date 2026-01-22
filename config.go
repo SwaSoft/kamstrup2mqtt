@@ -10,7 +10,6 @@ import (
 // Config holds all application settings.
 type Config struct {
 	Device   string `json:"device"`
-	Baud     int    `json:"baud"`
 	Broker   string `json:"broker"`
 	Topic    string `json:"topic"`
 	User     string `json:"user"`
@@ -23,7 +22,6 @@ type Config struct {
 func DefaultConfig(hostname string, pid int) Config {
 	return Config{
 		Device:   "/dev/ttyUSB0",
-		Baud:     2400,
 		Broker:   "tcp://localhost:1883",
 		Topic:    "serial/bridge",
 		ClientID: fmt.Sprintf("kamstrup2mqtt-%s-%d", hostname, pid),
@@ -59,7 +57,7 @@ func LoadCredentials(path string) (user, password string, err error) {
 	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), nil
 }
 
-func buildConfig(configPath, credfilePath, device string, baud int, broker, topic, user, pass, clientID string, qos int) (Config, error) {
+func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, clientID string, qos int) (Config, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "unknown"
@@ -89,7 +87,6 @@ func buildConfig(configPath, credfilePath, device string, baud int, broker, topi
 
 	cliFlags := Config{
 		Device:   device,
-		Baud:     baud,
 		Broker:   broker,
 		Topic:    topic,
 		User:     user,

@@ -62,9 +62,6 @@ func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 		if override.Device != "" {
 			cfg.Device = override.Device
 		}
-		if override.Baud != 0 {
-			cfg.Baud = override.Baud
-		}
 		if override.Broker != "" {
 			cfg.Broker = override.Broker
 		}

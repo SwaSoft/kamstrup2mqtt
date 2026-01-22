@@ -4,12 +4,6 @@ Default: /dev/ttyUSB0
 Description: Serial device path:
  The path to the serial device connected to the Kamstrup meter.
 
-Template: kamstrup2mqtt/baud
-Type: string
-Default: 2400
-Description: Serial baud rate:
- The baud rate for the serial connection.
-
 Template: kamstrup2mqtt/broker
 Type: string
 Default: tcp://localhost:1883

@@ -126,19 +126,19 @@ func TestShouldLogSerialOpen(t *testing.T) {
 func TestMergeConfigs(t *testing.T) {
 	logic := NewBridgeLogic(60 * time.Second)
 
-	base := Config{Device: "base", Baud: 115200, QoS: 0}
-	file := Config{Device: "file", Baud: 9600}
+	base := Config{Device: "base", Broker: "base-broker", QoS: 0}
+	file := Config{Device: "file", Broker: "file-broker"}
 	cli := Config{Device: "cli", QoS: 1}
 
 	// 1. File only overrides base
 	merged := logic.MergeConfigs(base, file, Config{QoS: -1})
-	if merged.Device != "file" || merged.Baud != 9600 || merged.QoS != 0 {
+	if merged.Device != "file" || merged.Broker != "file-broker" || merged.QoS != 0 {
 		t.Errorf("MergeConfigs (file only) failed: %+v", merged)
 	}
 
 	// 2. CLI overrides both
 	merged = logic.MergeConfigs(base, file, cli)
-	if merged.Device != "cli" || merged.Baud != 9600 || merged.QoS != 1 {
+	if merged.Device != "cli" || merged.Broker != "file-broker" || merged.QoS != 1 {
 		t.Errorf("MergeConfigs (full) failed: %+v", merged)
 	}
 }

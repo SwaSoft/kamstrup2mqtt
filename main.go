@@ -19,7 +19,6 @@ func main() {
 	configPath := flag.String("config", "", "Path to configuration file (JSON)")
 	credfilePath := flag.String("credfile", "", "Path to credentials file (username and password on separate lines)")
 	device := flag.String("device", "", "Serial device path")
-	baud := flag.Int("baud", 0, "Serial baud rate")
 	broker := flag.String("broker", "", "MQTT broker address")
 	topic := flag.String("topic", "", "MQTT topic")
 	user := flag.String("user", "", "MQTT username")
@@ -29,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	// 1. Build configuration
-	cfg, err := buildConfig(*configPath, *credfilePath, *device, *baud, *broker, *topic, *user, *pass, *clientID, *qos)
+	cfg, err := buildConfig(*configPath, *credfilePath, *device, *broker, *topic, *user, *pass, *clientID, *qos)
 	if err != nil {
 		log.Fatalf("Fatal error building configuration: %v", err)
 	}

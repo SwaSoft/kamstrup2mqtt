@@ -4,7 +4,6 @@ set -e
 . /usr/share/debconf/confmodule
 
 db_input high kamstrup2mqtt/device || true
-db_input high kamstrup2mqtt/baud || true
 db_input high kamstrup2mqtt/broker || true
 db_input high kamstrup2mqtt/topic || true
 db_input high kamstrup2mqtt/client_id || true

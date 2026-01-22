@@ -96,10 +96,10 @@ func (b *Bridge) runSerialLoop(ctx context.Context, done chan struct{}) {
 		}
 
 		if b.logic.ShouldLogSerialOpen(firstAttempt, backoff) {
-			log.Printf("Opening serial port %s at %d baud", b.config.Device, b.config.Baud)
+			log.Printf("Opening serial port %s", b.config.Device)
 		}
 
-		sc := &serial.Config{Name: b.config.Device, Baud: b.config.Baud, ReadTimeout: 15 * time.Second}
+		sc := &serial.Config{Name: b.config.Device, Baud: 2400, ReadTimeout: 15 * time.Second}
 		s, err := serial.OpenPort(sc)
 		if err != nil {
 			log.Printf("Error opening serial port: %v. Retrying in %v...", err, backoff)
