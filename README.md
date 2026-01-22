@@ -1,6 +1,6 @@
-# Serial-to-MQTT Bridge (`serial2mqtt`)
+# Kamstrup-to-MQTT Bridge (`kamstrup2mqtt`)
 
-A robust serial-to-MQTT bridge implemented in Go, designed to read length-encoded binary frames from a serial port and publish them as binary payloads to an MQTT broker.
+A robust serial-to-MQTT bridge implemented in Go, designed to read length-encoded binary frames from a Kamstrup power meter's serial stream and publish them as binary payloads to an MQTT broker.
 
 ## Features
 
@@ -11,16 +11,26 @@ A robust serial-to-MQTT bridge implemented in Go, designed to read length-encode
 - **Inactivity Monitoring**: Emits a warning if no valid frames are published for 60 seconds.
 - **Multi-Architecture Support**: Pre-compiled for AMD64 and ARM64.
 
-## Installation
+Download the appropriate `.deb` package for your platform from the releases page:
+- `kamstrup2mqtt_*_amd64.deb` (for AMD/Intel x86_64)
+- `kamstrup2mqtt_*_arm64.deb` (for ARM 64-bit)
 
-Download the appropriate binary for your platform:
-- `serial2mqtt-amd64` (for AMD/Intel x86_64)
-- `serial2mqtt-arm64` (for ARM 64-bit)
+Install using `dpkg`:
+```bash
+sudo dpkg -i kamstrup2mqtt_*.deb
+```
+
+The package will automatically:
+- Create the `kamstrup2mqtt` system user.
+- Add the user to the `dialout` group.
+- Install the binary to `/usr/bin/kamstrup2mqtt`.
+- Set up a default configuration at `/etc/kamstrup2mqtt/config.json`.
+- Install and enable the `systemd` service.
 
 ## Usage
 
 ```bash
-./serial2mqtt [options]
+./kamstrup2mqtt [options]
 ```
 
 ### Options
@@ -35,7 +45,7 @@ Download the appropriate binary for your platform:
 | `-topic` | MQTT topic | `serial/bridge` |
 | `-user` | MQTT username | (empty) |
 | `-pass` | MQTT password | (empty) |
-| `-clientid` | MQTT client ID | `serial2mqtt-<hostname>-<pid>` |
+| `-clientid` | MQTT client ID | `kamstrup2mqtt-<hostname>-<pid>` |
 | `-qos` | MQTT QoS level (0, 1, or 2) | `0` |
 
 ### Configuration Priority
@@ -66,12 +76,12 @@ This means CLI flags always win, credentials file overrides the JSON config, and
 
 2. Run the bridge:
    ```bash
-   ./serial2mqtt -config config.json
+   ./kamstrup2mqtt -config config.json
    ```
 
 3. Run with override:
    ```bash
-   ./serial2mqtt -config config.json -device /dev/ttyUSB0
+   ./kamstrup2mqtt -config config.json -device /dev/ttyUSB0
    ```
 
 ### Using Credentials File
@@ -86,7 +96,7 @@ For secure credential management (especially with systemd), you can use a separa
 
 2. Run the bridge with the credentials file:
    ```bash
-   ./serial2mqtt -config config.json -credfile /path/to/credentials
+   ./kamstrup2mqtt -config config.json -credfile /path/to/credentials
    ```
 
 The credentials file format supports:
@@ -108,7 +118,7 @@ Requires Go 1.22+.
 
 ```bash
 go mod tidy
-go build -o serial2mqtt
+go build -o kamstrup2mqtt
 ```
 
 ### Multi-Platform Builds
@@ -117,12 +127,12 @@ To compile for specific architectures (e.g., AMD64 or ARM64):
 
 **AMD64 (x86_64):**
 ```bash
-GOOS=linux GOARCH=amd64 go build -o serial2mqtt-amd64
+GOOS=linux GOARCH=amd64 go build -o kamstrup2mqtt-amd64
 ```
 
 **ARM64:**
 ```bash
-GOOS=linux GOARCH=arm64 go build -o serial2mqtt-arm64
+GOOS=linux GOARCH=arm64 go build -o kamstrup2mqtt-arm64
 ```
 
 ## Testing
@@ -144,110 +154,46 @@ go test -v ./...
 
 ## Running as a systemd Service
 
-The application includes native systemd integration with readiness notification and watchdog support.
+The easiest way to run as a service is by installing the `.deb` package, which handles all setup automatically.
 
-### Installation
+### Manual Installation (from source/tarball)
+
+If you are not using the `.deb` package, follow these steps:
 
 1. Copy the binary to a system location:
    ```bash
-   sudo cp serial2mqtt /usr/local/bin/
-   sudo chmod +x /usr/local/bin/serial2mqtt
+   sudo cp kamstrup2mqtt /usr/local/bin/
+   sudo chmod +x /usr/local/bin/kamstrup2mqtt
    ```
 
 2. Create a configuration file:
    ```bash
-   sudo mkdir -p /etc/serial2mqtt
-   sudo nano /etc/serial2mqtt/config.json
+   sudo mkdir -p /etc/kamstrup2mqtt
+   sudo nano /etc/kamstrup2mqtt/config.json
    ```
 
-3. Add your user to the `dialout` group for serial port access (or run as root):
+3. Create the service user:
    ```bash
-   sudo usermod -aG dialout serial2mqtt
+   sudo useradd -r -s /usr/sbin/nologin -G dialout kamstrup2mqtt
    ```
 
-### Unit File
+4. Create `/etc/systemd/system/kamstrup2mqtt.service` (see [Unit File](#unit-file) below).
 
-Create `/etc/systemd/system/serial2mqtt.service`:
-
-```ini
-[Unit]
-Description=Serial to MQTT Bridge
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-ExecStart=/usr/local/bin/serial2mqtt -config /etc/serial2mqtt/config.json
-Restart=on-failure
-RestartSec=5
-
-# Watchdog: service must send keep-alive within this interval
-WatchdogSec=30
-
-# Security hardening
-User=serial2mqtt
-Group=dialout
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadOnlyPaths=/
-ReadWritePaths=/dev
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Secure Credentials with LoadCredential
-
-For enhanced security, use systemd's `LoadCredential` directive to manage MQTT credentials separately from the main configuration:
-
-1. Create a credentials file:
+5. Enable and Start:
    ```bash
-   sudo mkdir -p /etc/serial2mqtt
-   sudo nano /etc/serial2mqtt/mqtt.credentials
-   # Add username on first line, password on second line
-   sudo chmod 600 /etc/serial2mqtt/mqtt.credentials
+   sudo systemctl daemon-reload
+   sudo systemctl enable kamstrup2mqtt
+   sudo systemctl start kamstrup2mqtt
    ```
-
-2. Update the unit file to use `LoadCredential`:
-   ```ini
-   [Service]
-   Type=notify
-   LoadCredential=mqtt-creds:/etc/serial2mqtt/mqtt.credentials
-   ExecStart=/usr/local/bin/serial2mqtt \
-       -config /etc/serial2mqtt/config.json \
-       -credfile ${CREDENTIALS_DIRECTORY}/mqtt-creds
-   ```
-
-This approach:
-- Keeps credentials separate from the JSON config file
-- Allows credentials to be stored with restricted permissions (600)
-- Credentials are only accessible to the service process via `CREDENTIALS_DIRECTORY`
-- Works seamlessly with secret management tools that populate credential files
-
-### Create Service User
-
-```bash
-sudo useradd -r -s /usr/sbin/nologin -G dialout serial2mqtt
-```
-
-### Enable and Start
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable serial2mqtt
-sudo systemctl start serial2mqtt
-```
 
 ### Monitoring
 
 ```bash
 # View logs
-journalctl -u serial2mqtt -f
+journalctl -u kamstrup2mqtt -f
 
 # Check status
-systemctl status serial2mqtt
+systemctl status kamstrup2mqtt
 ```
 
 ### Watchdog Behavior

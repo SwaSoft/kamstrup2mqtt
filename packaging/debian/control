@@ -1,0 +1,9 @@
+Package: kamstrup2mqtt
+Version: ${VERSION}
+Section: utils
+Priority: optional
+Architecture: ${ARCH}
+Maintainer: Oskar <oskar@example.com>
+Description: Kamstrup to MQTT Bridge
+ A service that reads data from Kamstrup meters via serial and publishes to MQTT.
+ Depends: libc6, debconf (>= 0.5)

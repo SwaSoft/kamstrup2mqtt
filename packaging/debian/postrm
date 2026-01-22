@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "purge" ]; then
+    if [ -e /usr/share/debconf/confmodule ]; then
+        . /usr/share/debconf/confmodule
+        db_purge
+    fi
+fi
+
+SERVICE_NAME="kamstrup2mqtt"
+
+case "$1" in
+    purge)
+        # On purge, we keep the user but could remove config if we really wanted to.
+        # Standard Debian practice is to keep system users created by postinst.
+        # But we should remove the config dir if purging.
+        echo "Purging configuration for $SERVICE_NAME..."
+        rm -rf /etc/kamstrup2mqtt
+    ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        rm -rf /etc/systemd/system/kamstrup2mqtt.service.d/debconf-credentials.conf
+        systemctl daemon-reload
+    ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

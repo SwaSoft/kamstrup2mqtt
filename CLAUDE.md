@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build Commands
+# Build Commands
 
 ```bash
 # Build
-go build -o serial2mqtt
+go build -o kamstrup2mqtt
 
 # Run tests
 go test ./...
@@ -15,8 +15,8 @@ go test ./...
 go test -run TestFrameParser_ValidFrame ./...
 
 # Cross-compile
-GOOS=linux GOARCH=amd64 go build -o serial2mqtt-amd64
-GOOS=linux GOARCH=arm64 go build -o serial2mqtt-arm64
+GOOS=linux GOARCH=amd64 go build -o kamstrup2mqtt-amd64
+GOOS=linux GOARCH=arm64 go build -o kamstrup2mqtt-arm64
 ```
 
 ## Architecture
@@ -25,7 +25,7 @@ This is a single-file Go application (`main.go`) that bridges serial port data t
 
 ### Core Components
 
-**FrameParser** - State machine that reconstructs length-encoded binary frames from a serial byte stream. Frames are delimited by `0x7E` with a 12-bit length field in bytes 1-2. The parser handles resynchronization when unexpected delimiters appear mid-frame.
+**FrameParser** - State machine that reconstructs length-encoded binary frames from a Kamstrup power meter's serial stream. Frames are delimited by `0x7E` with a 12-bit length field in bytes 1-2. The parser handles resynchronization when unexpected delimiters appear mid-frame.
 
 **Main loop** - Runs serial reading in a goroutine with exponential backoff reconnection. Uses `context.Context` for coordinated shutdown. A separate ticker monitors for inactivity (no valid frames for 60 seconds) and sends systemd watchdog notifications when enabled.
 

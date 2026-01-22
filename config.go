@@ -26,7 +26,7 @@ func DefaultConfig(hostname string, pid int) Config {
 		Baud:     2400,
 		Broker:   "tcp://localhost:1883",
 		Topic:    "serial/bridge",
-		ClientID: fmt.Sprintf("serial2mqtt-%s-%d", hostname, pid),
+		ClientID: fmt.Sprintf("kamstrup2mqtt-%s-%d", hostname, pid),
 		QoS:      0,
 	}
 }

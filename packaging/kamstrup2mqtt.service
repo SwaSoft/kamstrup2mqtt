@@ -1,0 +1,31 @@
+[Unit]
+Description=Kamstrup to MQTT Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+Environment=JOURNAL_STREAM=yes
+ExecStart=/usr/bin/kamstrup2mqtt -config /etc/kamstrup2mqtt/config.json
+Restart=on-failure
+RestartSec=5
+
+# Watchdog: service must send keep-alive within this interval
+WatchdogSec=30
+
+# Security hardening
+User=kamstrup2mqtt
+Group=dialout
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+ReadWritePaths=/dev
+
+# Credentials management
+# LoadCredential=mqtt-creds:/etc/kamstrup2mqtt/mqtt.credentials
+# ExecStart=/usr/local/bin/kamstrup2mqtt -config /etc/kamstrup2mqtt/config.json -credfile ${CREDENTIALS_DIRECTORY}/mqtt-creds
+
+[Install]
+WantedBy=multi-user.target

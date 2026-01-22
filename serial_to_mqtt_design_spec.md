@@ -1,8 +1,8 @@
-# Serial-to-MQTT Bridge – Design Specification
+# Kamstrup-to-MQTT Bridge – Design Specification
 
 ## 1. Purpose and High-Level Behavior
 
-The program acts as a **serial-to-MQTT bridge** for framed binary data.
+The program acts as a **Kamstrup-to-MQTT bridge** for framed binary data.
 
 It continuously:
 1. Reads raw bytes from a serial port.

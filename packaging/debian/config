@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+. /usr/share/debconf/confmodule
+
+db_input high kamstrup2mqtt/device || true
+db_input low kamstrup2mqtt/baud || true
+db_input high kamstrup2mqtt/broker || true
+db_input low kamstrup2mqtt/topic || true
+db_input low kamstrup2mqtt/client_id || true
+db_input low kamstrup2mqtt/qos || true
+db_input medium kamstrup2mqtt/mqtt_user || true
+db_input medium kamstrup2mqtt/mqtt_password || true
+db_go || true

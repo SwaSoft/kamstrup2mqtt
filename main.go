@@ -24,7 +24,7 @@ func main() {
 	topic := flag.String("topic", "", "MQTT topic")
 	user := flag.String("user", "", "MQTT username")
 	pass := flag.String("pass", "", "MQTT password")
-	clientID := flag.String("clientid", "", "MQTT client ID (default: serial2mqtt-<hostname>-<pid>)")
+	clientID := flag.String("clientid", "", "MQTT client ID (default: kamstrup2mqtt-<hostname>-<pid>)")
 	qos := flag.Int("qos", -1, "MQTT QoS level (0, 1, or 2)")
 	flag.Parse()
 

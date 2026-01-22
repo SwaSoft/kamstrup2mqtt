@@ -1,0 +1,46 @@
+Template: kamstrup2mqtt/device
+Type: string
+Default: /dev/ttyUSB0
+Description: Serial device path:
+ The path to the serial device connected to the Kamstrup meter.
+
+Template: kamstrup2mqtt/baud
+Type: string
+Default: 2400
+Description: Serial baud rate:
+ The baud rate for the serial connection.
+
+Template: kamstrup2mqtt/broker
+Type: string
+Default: tcp://localhost:1883
+Description: MQTT broker URI:
+ The URI of the MQTT broker (e.g., tcp://localhost:1883).
+
+Template: kamstrup2mqtt/topic
+Type: string
+Default: serial/bridge
+Description: MQTT topic:
+ The topic where messages will be published.
+
+Template: kamstrup2mqtt/client_id
+Type: string
+Default: kamstrup2mqtt-system
+Description: MQTT client ID:
+ The client ID to use for the MQTT connection.
+
+Template: kamstrup2mqtt/qos
+Type: select
+Choices: 0, 1, 2
+Default: 0
+Description: MQTT QoS level:
+ The Quality of Service level for MQTT messages.
+
+Template: kamstrup2mqtt/mqtt_user
+Type: string
+Description: MQTT username (optional):
+ Leave empty if no authentication is required.
+
+Template: kamstrup2mqtt/mqtt_password
+Type: password
+Description: MQTT password (optional):
+ Leave empty if no authentication is required.

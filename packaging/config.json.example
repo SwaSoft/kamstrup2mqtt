@@ -1,0 +1,8 @@
+{
+  "device": "/dev/ttyUSB0",
+  "baud": 2400,
+  "broker": "tcp://localhost:1883",
+  "topic": "serial/bridge",
+  "client_id": "kamstrup2mqtt-system",
+  "qos": 0
+}

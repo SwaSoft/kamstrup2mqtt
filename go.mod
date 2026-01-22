@@ -1,4 +1,4 @@
-module serial2mqtt
+module kamstrup2mqtt
 
 go 1.24.0
 

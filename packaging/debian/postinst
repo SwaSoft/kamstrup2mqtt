@@ -1,0 +1,110 @@
+#!/bin/bash
+set -e
+
+. /usr/share/debconf/confmodule
+
+SERVICE_NAME="kamstrup2mqtt"
+CONFIG_DIR="/etc/kamstrup2mqtt"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+EXAMPLE_FILE="/usr/share/doc/kamstrup2mqtt/config.json.example"
+
+case "$1" in
+    configure)
+        # 1. Create system user
+        if ! id "$SERVICE_NAME" &>/dev/null; then
+            echo "Creating system user $SERVICE_NAME..."
+            useradd -r -s /usr/sbin/nologin -G dialout "$SERVICE_NAME"
+        fi
+
+        # 2. Get values from debconf
+        db_get kamstrup2mqtt/device
+        DEVICE="$RET"
+        db_get kamstrup2mqtt/baud
+        BAUD="$RET"
+        db_get kamstrup2mqtt/broker
+        BROKER="$RET"
+        db_get kamstrup2mqtt/topic
+        TOPIC="$RET"
+        db_get kamstrup2mqtt/client_id
+        CLIENT_ID="$RET"
+        db_get kamstrup2mqtt/qos
+        QOS="$RET"
+        db_get kamstrup2mqtt/mqtt_user
+        MQTT_USER="$RET"
+        db_get kamstrup2mqtt/mqtt_password
+        MQTT_PASS="$RET"
+
+        # 3. Setup initial config if missing or update it
+        mkdir -p "$CONFIG_DIR"
+        
+        # We'll create a new config.json based on debconf values
+        # We don't use the example file directly as a base if we want to be sure about the content
+        cat > "$CONFIG_FILE" <<EOF
+{
+  "device": "$DEVICE",
+  "baud": $BAUD,
+  "broker": "$BROKER",
+  "topic": "$TOPIC",
+  "client_id": "$CLIENT_ID",
+  "qos": $QOS
+}
+EOF
+        
+        # Ensure correct ownership and permissions
+        chown "$SERVICE_NAME:$SERVICE_NAME" "$CONFIG_FILE"
+        chmod 640 "$CONFIG_FILE"
+        chown "$SERVICE_NAME:$SERVICE_NAME" "$CONFIG_DIR"
+
+        # 4. Handle credentials
+        CRED_FILE="$CONFIG_DIR/mqtt.credentials"
+        OVERRIDE_DIR="/etc/systemd/system/kamstrup2mqtt.service.d"
+        OVERRIDE_FILE="$OVERRIDE_DIR/debconf-credentials.conf"
+
+        if [ -n "$MQTT_USER" ]; then
+            echo "Configuring MQTT credentials..."
+            printf "%s\n%s\n" "$MQTT_USER" "$MQTT_PASS" > "$CRED_FILE"
+            chown "$SERVICE_NAME:$SERVICE_NAME" "$CRED_FILE"
+            chmod 600 "$CRED_FILE"
+
+            mkdir -p "$OVERRIDE_DIR"
+            cat > "$OVERRIDE_FILE" <<EOF
+[Service]
+LoadCredential=mqtt-creds:$CRED_FILE
+ExecStart=
+ExecStart=/usr/bin/kamstrup2mqtt -config $CONFIG_FILE -credfile \${CREDENTIALS_DIRECTORY}/mqtt-creds
+EOF
+        else
+            rm -f "$CRED_FILE"
+            rm -f "$OVERRIDE_FILE"
+            if [ -d "$OVERRIDE_DIR" ]; then
+                rmdir "$OVERRIDE_DIR" 2>/dev/null || true
+            fi
+        fi
+
+        # 5. Handle systemd
+        systemctl daemon-reload
+        if ! systemctl is-enabled "$SERVICE_NAME" >/dev/null 2>&1; then
+            echo "Enabling $SERVICE_NAME service..."
+            systemctl enable "$SERVICE_NAME"
+        fi
+        
+        # Restart service if it was running or start it
+        if systemctl is-active "$SERVICE_NAME" >/dev/null 2>&1; then
+            echo "Restarting $SERVICE_NAME..."
+            systemctl restart "$SERVICE_NAME"
+        else
+            echo "Starting $SERVICE_NAME..."
+            systemctl start "$SERVICE_NAME"
+        fi
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0
