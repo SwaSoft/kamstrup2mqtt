@@ -23,7 +23,50 @@ Download the `.deb` package for your platform from the releases page:
 sudo dpkg -i kamstrup2mqtt_*.deb
 ```
 
-The package creates a `kamstrup2mqtt` system user, installs the binary to `/usr/bin/`, sets up a default configuration at `/etc/kamstrup2mqtt/config.json`, and enables the systemd service.
+### Interactive Configuration
+
+During installation, you'll be prompted for:
+
+| Setting | Default |
+|---------|---------|
+| Serial device path | `/dev/ttyUSB0` |
+| MQTT broker URI | `tcp://localhost:1883` |
+| MQTT topic | `serial/bridge` |
+| MQTT client ID | `kamstrup2mqtt-system` |
+| QoS level | `0` |
+| MQTT username | (none) |
+| MQTT password | (none) |
+
+The installer then:
+- Creates a `kamstrup2mqtt` system user with `dialout` group membership
+- Writes `/etc/kamstrup2mqtt/config.json` from your answers
+- If credentials were provided, stores them securely in `/etc/kamstrup2mqtt/mqtt.credentials`
+- Enables and starts the systemd service
+
+### Non-Interactive Installation
+
+To install without prompts (e.g., for automation), preseed debconf:
+
+```bash
+sudo debconf-set-selections <<EOF
+kamstrup2mqtt kamstrup2mqtt/device string /dev/ttyUSB0
+kamstrup2mqtt kamstrup2mqtt/broker string tcp://192.168.1.100:1883
+kamstrup2mqtt kamstrup2mqtt/topic string serial/bridge
+kamstrup2mqtt kamstrup2mqtt/client_id string kamstrup2mqtt
+kamstrup2mqtt kamstrup2mqtt/qos select 0
+kamstrup2mqtt kamstrup2mqtt/mqtt_user string myuser
+kamstrup2mqtt kamstrup2mqtt/mqtt_password password mypassword
+EOF
+sudo DEBIAN_FRONTEND=noninteractive dpkg -i kamstrup2mqtt_*.deb
+```
+
+### Reconfiguring
+
+To change settings after installation:
+
+```bash
+sudo dpkg-reconfigure kamstrup2mqtt
+```
 
 ## Configuration
 
