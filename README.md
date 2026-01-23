@@ -214,3 +214,7 @@ Frames use this structure:
 - Length is 12 bits: `((byte1 & 0x0F) << 8) | byte2`
 - Total packet size = length + 2 (for delimiters)
 - Valid packet size: 10-4097 bytes
+
+## Home Assistant Integration
+
+This program has been tested and verified to work with the [AMS HAN Meter Reader](https://github.com/toreamun/amshan-homeassistant) integration for Home Assistant. Configure the integration to subscribe to the MQTT topic used by kamstrup2mqtt.
