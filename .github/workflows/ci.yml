@@ -76,8 +76,8 @@ jobs:
           cp kamstrup2mqtt-${{ matrix.goarch }} "${PKG_DIR}/usr/bin/kamstrup2mqtt"
           chmod 755 "${PKG_DIR}/usr/bin/kamstrup2mqtt"
 
-          # Copy config example
-          cp packaging/config.json.example "${PKG_DIR}/etc/kamstrup2mqtt/"
+          # Copy config file (listed in conffiles, so user changes preserved on upgrade)
+          cp packaging/config.json.example "${PKG_DIR}/etc/kamstrup2mqtt/config.json"
 
           # Copy systemd service
           cp packaging/kamstrup2mqtt.service "${PKG_DIR}/lib/systemd/system/"
