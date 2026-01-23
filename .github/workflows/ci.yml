@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            deb_arch: amd64
+          - goos: linux
+            goarch: arm64
+            deb_arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o kamstrup2mqtt-${{ matrix.goarch }}
+
+      - name: Build .deb package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          ARCH=${{ matrix.deb_arch }}
+          PKG_DIR="kamstrup2mqtt_${VERSION}_${ARCH}"
+
+          mkdir -p "${PKG_DIR}/DEBIAN"
+          mkdir -p "${PKG_DIR}/usr/bin"
+          mkdir -p "${PKG_DIR}/etc/kamstrup2mqtt"
+          mkdir -p "${PKG_DIR}/lib/systemd/system"
+
+          # Copy binary
+          cp kamstrup2mqtt-${{ matrix.goarch }} "${PKG_DIR}/usr/bin/kamstrup2mqtt"
+          chmod 755 "${PKG_DIR}/usr/bin/kamstrup2mqtt"
+
+          # Copy config example
+          cp packaging/config.json.example "${PKG_DIR}/etc/kamstrup2mqtt/"
+
+          # Copy systemd service
+          cp packaging/kamstrup2mqtt.service "${PKG_DIR}/lib/systemd/system/"
+
+          # Generate control file
+          sed -e "s/\${VERSION}/${VERSION}/" -e "s/\${ARCH}/${ARCH}/" \
+            packaging/debian/control > "${PKG_DIR}/DEBIAN/control"
+
+          # Copy maintainer scripts
+          for script in postinst prerm postrm config; do
+            if [[ -f "packaging/debian/${script}" ]]; then
+              cp "packaging/debian/${script}" "${PKG_DIR}/DEBIAN/"
+              chmod 755 "${PKG_DIR}/DEBIAN/${script}"
+            fi
+          done
+
+          # Copy conffiles and templates
+          for file in conffiles templates; do
+            if [[ -f "packaging/debian/${file}" ]]; then
+              cp "packaging/debian/${file}" "${PKG_DIR}/DEBIAN/"
+            fi
+          done
+
+          # Build package
+          dpkg-deb --build "${PKG_DIR}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kamstrup2mqtt-${{ matrix.goarch }}
+          path: kamstrup2mqtt-${{ matrix.goarch }}
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kamstrup2mqtt-${{ matrix.deb_arch }}-deb
+          path: '*.deb'
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir release
+          # Copy binaries
+          cp artifacts/kamstrup2mqtt-amd64/kamstrup2mqtt-amd64 release/
+          cp artifacts/kamstrup2mqtt-arm64/kamstrup2mqtt-arm64 release/
+          # Copy deb packages
+          cp artifacts/kamstrup2mqtt-amd64-deb/*.deb release/
+          cp artifacts/kamstrup2mqtt-arm64-deb/*.deb release/
+          # Copy install script and config
+          cp packaging/install.sh release/
+          cp packaging/config.json.example release/
+          cp packaging/kamstrup2mqtt.service release/
+
+          # Create checksums
+          cd release
+          sha256sum * > SHA256SUMS
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
