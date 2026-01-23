@@ -1,7 +1,7 @@
 VERSION=$(shell (git describe --tags --always --dirty 2>/dev/null || echo "dev") | sed 's/^v//')
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
 
-.PHONY: all build build-cross clean test package
+.PHONY: all build build-cross clean test deb
 
 all: test build
 
@@ -18,17 +18,6 @@ test:
 clean:
 	rm -f kamstrup2mqtt kamstrup2mqtt-amd64 kamstrup2mqtt-arm64
 	rm -rf dist
-
-package: build-cross deb
-	mkdir -p dist/kamstrup2mqtt
-	cp kamstrup2mqtt-amd64 dist/kamstrup2mqtt/
-	cp kamstrup2mqtt-arm64 dist/kamstrup2mqtt/
-	cp packaging/install.sh dist/kamstrup2mqtt/
-	cp packaging/config.json.example dist/kamstrup2mqtt/
-	cp packaging/kamstrup2mqtt.service dist/kamstrup2mqtt/
-	chmod +x dist/kamstrup2mqtt/install.sh
-	cd dist && tar -czvf kamstrup2mqtt-$(VERSION).tar.gz kamstrup2mqtt
-	echo "Tarball package created: dist/kamstrup2mqtt-$(VERSION).tar.gz"
 
 deb: build-cross
 	@echo "Building Debian packages..."

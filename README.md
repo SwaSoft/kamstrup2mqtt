@@ -170,25 +170,62 @@ Creates `dist/kamstrup2mqtt_<version>_amd64.deb` and `dist/kamstrup2mqtt_<versio
 
 ### Manual Installation
 
-If not using the `.deb` package:
+If not using the `.deb` package, download the binary for your architecture from the releases page and install manually:
 
 1. Copy binary:
    ```bash
-   sudo cp kamstrup2mqtt /usr/local/bin/
+   sudo cp kamstrup2mqtt-amd64 /usr/bin/kamstrup2mqtt
+   sudo chmod +x /usr/bin/kamstrup2mqtt
    ```
 
-2. Create config directory and file:
-   ```bash
-   sudo mkdir -p /etc/kamstrup2mqtt
-   sudo nano /etc/kamstrup2mqtt/config.json
-   ```
-
-3. Create service user:
+2. Create service user:
    ```bash
    sudo useradd -r -s /usr/sbin/nologin -G dialout kamstrup2mqtt
    ```
 
-4. Create a systemd unit file at `/etc/systemd/system/kamstrup2mqtt.service`
+3. Create config directory and file:
+   ```bash
+   sudo mkdir -p /etc/kamstrup2mqtt
+   sudo tee /etc/kamstrup2mqtt/config.json <<EOF
+   {
+     "device": "/dev/ttyUSB0",
+     "broker": "tcp://localhost:1883",
+     "topic": "serial/bridge",
+     "client_id": "kamstrup2mqtt",
+     "qos": 0
+   }
+   EOF
+   sudo chown kamstrup2mqtt:kamstrup2mqtt /etc/kamstrup2mqtt/config.json
+   sudo chmod 640 /etc/kamstrup2mqtt/config.json
+   ```
+
+4. Create systemd unit file:
+   ```bash
+   sudo tee /etc/systemd/system/kamstrup2mqtt.service <<EOF
+   [Unit]
+   Description=Kamstrup to MQTT Bridge
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   Type=notify
+   ExecStart=/usr/bin/kamstrup2mqtt -config /etc/kamstrup2mqtt/config.json
+   Restart=on-failure
+   RestartSec=5
+   WatchdogSec=30
+   User=kamstrup2mqtt
+   Group=dialout
+   NoNewPrivileges=yes
+   ProtectSystem=strict
+   ProtectHome=yes
+   PrivateTmp=yes
+   ReadOnlyPaths=/
+   ReadWritePaths=/dev
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+   ```
 
 5. Enable and start:
    ```bash

@@ -140,10 +140,6 @@ jobs:
           # Copy deb packages
           cp artifacts/kamstrup2mqtt-amd64-deb/*.deb release/
           cp artifacts/kamstrup2mqtt-arm64-deb/*.deb release/
-          # Copy install script and config
-          cp packaging/install.sh release/
-          cp packaging/config.json.example release/
-          cp packaging/kamstrup2mqtt.service release/
 
           # Create checksums
           cd release
