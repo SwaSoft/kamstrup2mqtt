@@ -9,6 +9,7 @@ coverage.out
 coverage.html
 
 # IDE/Editor
+CLAUDE.md
 .idea/
 .vscode/
 *.swp
