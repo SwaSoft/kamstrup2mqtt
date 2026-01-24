@@ -37,10 +37,7 @@ func (p *FrameParser) Reset() {
 func (p *FrameParser) ProcessByte(b byte) ([]byte, error) {
 	if !p.frameStarted {
 		if b == Delimiter {
-			p.frameStarted = true
-			p.frameBuffer = append(p.frameBuffer[:0], b)
-			p.byteCounter = 1
-			p.expectedPacketSize = 0
+			p.startFrame(b)
 		}
 		return nil, nil
 	}
@@ -48,37 +45,44 @@ func (p *FrameParser) ProcessByte(b byte) ([]byte, error) {
 	p.frameBuffer = append(p.frameBuffer, b)
 	p.byteCounter++
 
-	if b == Delimiter {
-		if p.expectedPacketSize > 0 && p.byteCounter == p.expectedPacketSize {
+	// Resync on delimiter before length field is complete
+	if b == Delimiter && p.byteCounter < 3 {
+		p.startFrame(b)
+		return nil, nil
+	}
+
+	// Parse length field at byte 3
+	if p.byteCounter == 3 {
+		length := int(p.frameBuffer[1]&0x0F)<<8 | int(p.frameBuffer[2])
+		p.expectedPacketSize = length + 2
+		if p.expectedPacketSize < MinPacketSize || p.expectedPacketSize > MaxPacketSize {
+			size := p.expectedPacketSize
+			p.Reset()
+			return nil, fmt.Errorf("invalid packet size %d (length=%d)", size, length)
+		}
+	}
+
+	// Check for frame completion
+	if p.expectedPacketSize > 0 && p.byteCounter == p.expectedPacketSize {
+		if b == Delimiter {
 			frame := make([]byte, len(p.frameBuffer))
 			copy(frame, p.frameBuffer)
 			p.Reset()
 			return frame, nil
 		}
-
-		if p.byteCounter < 3 {
-			p.Reset()
-			p.frameStarted = true
-			p.frameBuffer = append(p.frameBuffer[:0], b)
-			p.byteCounter = 1
-			return nil, nil
-		}
-	}
-
-	if p.byteCounter == 3 {
-		length := (int(p.frameBuffer[1]&0x0F) << 8) | int(p.frameBuffer[2])
-		p.expectedPacketSize = length + 2
-		if p.expectedPacketSize < MinPacketSize || p.expectedPacketSize > MaxPacketSize {
-			actualSize := p.expectedPacketSize
-			p.Reset()
-			return nil, fmt.Errorf("invalid packet size %d (length=%d)", actualSize, length)
-		}
-	}
-
-	if p.expectedPacketSize > 0 && p.byteCounter == p.expectedPacketSize {
+		idx := p.byteCounter - 1
 		p.Reset()
-		return nil, fmt.Errorf("malformed frame: last byte at index %d is 0x%02X not 0x%02X", p.byteCounter-1, b, Delimiter)
+		return nil, fmt.Errorf("malformed frame: last byte at index %d is 0x%02X not 0x%02X", idx, b, Delimiter)
 	}
 
 	return nil, nil
+}
+
+// startFrame initializes state for a new frame starting with the given delimiter byte.
+func (p *FrameParser) startFrame(b byte) {
+	p.frameStarted = true
+	p.frameBuffer = p.frameBuffer[:0]
+	p.frameBuffer = append(p.frameBuffer, b)
+	p.byteCounter = 1
+	p.expectedPacketSize = 0
 }
