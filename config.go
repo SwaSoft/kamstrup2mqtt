@@ -15,7 +15,12 @@ type Config struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	ClientID string `json:"client_id"`
-	QoS      int    `json:"qos"`
+	QoS      *int   `json:"qos,omitempty"`
+}
+
+// intPtr returns a pointer to the given int value.
+func intPtr(i int) *int {
+	return &i
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -25,7 +30,7 @@ func DefaultConfig(hostname string, pid int) Config {
 		Broker:   "tcp://localhost:1883",
 		Topic:    "serial/bridge",
 		ClientID: fmt.Sprintf("kamstrup2mqtt-%s-%d", hostname, pid),
-		QoS:      0,
+		QoS:      intPtr(0),
 	}
 }
 
@@ -92,7 +97,9 @@ func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, cl
 		User:     user,
 		Password: pass,
 		ClientID: clientID,
-		QoS:      qos,
+	}
+	if qos >= 0 {
+		cliFlags.QoS = intPtr(qos)
 	}
 
 	logic := NewBridgeLogic(0) // InactivityTimeout not needed for merging

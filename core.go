@@ -77,7 +77,7 @@ func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 		if override.ClientID != "" {
 			cfg.ClientID = override.ClientID
 		}
-		if override.QoS != 0 && override.QoS != -1 {
+		if override.QoS != nil {
 			cfg.QoS = override.QoS
 		}
 	}
@@ -87,8 +87,11 @@ func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 
 // ValidateConfig checks if the configuration is valid.
 func (l *BridgeLogic) ValidateConfig(cfg Config) error {
-	if cfg.QoS < 0 || cfg.QoS > 2 {
-		return fmt.Errorf("invalid QoS level %d (must be 0, 1, or 2)", cfg.QoS)
+	if cfg.QoS == nil {
+		return fmt.Errorf("QoS level not set")
+	}
+	if *cfg.QoS < 0 || *cfg.QoS > 2 {
+		return fmt.Errorf("invalid QoS level %d (must be 0, 1, or 2)", *cfg.QoS)
 	}
 	return nil
 }

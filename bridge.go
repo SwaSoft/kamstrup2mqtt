@@ -196,7 +196,7 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 
 			if frame != nil {
 				firstErrorSilent = false
-				token := b.mqtt.Publish(b.config.Topic, byte(b.config.QoS), false, frame)
+				token := b.mqtt.Publish(b.config.Topic, byte(*b.config.QoS), false, frame)
 				if token.Wait() && token.Error() != nil {
 					b.metrics.mqttPublishFails.Add(1)
 					log.Printf("Error publishing to MQTT: %v", token.Error())

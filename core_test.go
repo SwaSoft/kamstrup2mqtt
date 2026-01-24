@@ -131,20 +131,28 @@ func TestShouldLogSerialOpen(t *testing.T) {
 func TestMergeConfigs(t *testing.T) {
 	logic := NewBridgeLogic(60 * time.Second)
 
-	base := Config{Device: "base", Broker: "base-broker", QoS: 0}
+	base := Config{Device: "base", Broker: "base-broker", QoS: intPtr(0)}
 	file := Config{Device: "file", Broker: "file-broker"}
-	cli := Config{Device: "cli", QoS: 1}
+	cli := Config{Device: "cli", QoS: intPtr(1)}
 
-	// 1. File only overrides base
-	merged := logic.MergeConfigs(base, file, Config{QoS: -1})
-	if merged.Device != "file" || merged.Broker != "file-broker" || merged.QoS != 0 {
+	// 1. File only overrides base (file has nil QoS, so base QoS preserved)
+	merged := logic.MergeConfigs(base, file, Config{})
+	if merged.Device != "file" || merged.Broker != "file-broker" || *merged.QoS != 0 {
 		t.Errorf("MergeConfigs (file only) failed: %+v", merged)
 	}
 
 	// 2. CLI overrides both
 	merged = logic.MergeConfigs(base, file, cli)
-	if merged.Device != "cli" || merged.Broker != "file-broker" || merged.QoS != 1 {
+	if merged.Device != "cli" || merged.Broker != "file-broker" || *merged.QoS != 1 {
 		t.Errorf("MergeConfigs (full) failed: %+v", merged)
+	}
+
+	// 3. Explicit QoS 0 in override should work
+	cliQoS0 := Config{QoS: intPtr(0)}
+	baseQoS2 := Config{Device: "base", QoS: intPtr(2)}
+	merged = logic.MergeConfigs(baseQoS2, cliQoS0)
+	if *merged.QoS != 0 {
+		t.Errorf("MergeConfigs (explicit QoS 0) failed: QoS = %d, want 0", *merged.QoS)
 	}
 }
 
@@ -360,7 +368,7 @@ func TestMetricsFramesPublished(t *testing.T) {
 	b := &Bridge{
 		parser: NewFrameParser(),
 		mqtt:   mockClient,
-		config: Config{Topic: "test/topic", QoS: 0},
+		config: Config{Topic: "test/topic", QoS: intPtr(0)},
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 
@@ -399,7 +407,7 @@ func TestMetricsMQTTPublishFails(t *testing.T) {
 	b := &Bridge{
 		parser: NewFrameParser(),
 		mqtt:   mockClient,
-		config: Config{Topic: "test/topic", QoS: 0},
+		config: Config{Topic: "test/topic", QoS: intPtr(0)},
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 

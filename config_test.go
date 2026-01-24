@@ -86,8 +86,8 @@ func TestBuildConfig(t *testing.T) {
 	if cfg.ClientID != "client-123" {
 		t.Errorf("expected clientid flag client-123, got %s", cfg.ClientID)
 	}
-	if cfg.QoS != 1 {
-		t.Errorf("expected qos flag 1, got %d", cfg.QoS)
+	if cfg.QoS == nil || *cfg.QoS != 1 {
+		t.Errorf("expected qos flag 1, got %v", cfg.QoS)
 	}
 
 	// Test case: defaults when no file or flags
@@ -146,7 +146,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 	if cfg3.Device != "/dev/file" || cfg3.Broker != "tcp://file:1883" ||
 		cfg3.Topic != "file/topic" || cfg3.User != "file-user" || cfg3.Password != "file-password" ||
-		cfg3.ClientID != "file-client" || cfg3.QoS != 2 {
+		cfg3.ClientID != "file-client" || cfg3.QoS == nil || *cfg3.QoS != 2 {
 		t.Errorf("config with all file fields mismatch: %+v", cfg3)
 	}
 }
