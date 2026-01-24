@@ -53,5 +53,5 @@ func main() {
 
 	// 4. Start Bridge
 	bridge := NewBridge(cfg, client)
-	bridge.Start(ctx, sigChan)
+	bridge.Start(ctx, cancel, sigChan)
 }

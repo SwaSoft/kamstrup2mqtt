@@ -74,7 +74,8 @@ func NewBridge(cfg Config, client mqtt.Client) *Bridge {
 }
 
 // Start runs the bridge until either the context is canceled or a signal is received on sigChan.
-func (b *Bridge) Start(ctx context.Context, sigChan chan os.Signal) {
+// The cancel function should be passed to allow graceful shutdown of the serial loop.
+func (b *Bridge) Start(ctx context.Context, cancel context.CancelFunc, sigChan chan os.Signal) {
 	daemon.SdNotify(false, daemon.SdNotifyReady)
 
 	serialDone := make(chan struct{})
@@ -90,6 +91,17 @@ func (b *Bridge) Start(ctx context.Context, sigChan chan os.Signal) {
 			log.Printf("Received signal %v, shutting down...", s)
 			b.logMetrics()
 			daemon.SdNotify(false, daemon.SdNotifyStopping)
+
+			// Cancel context to signal serial loop to stop
+			cancel()
+
+			// Wait for serial loop to finish (with timeout)
+			select {
+			case <-serialDone:
+				log.Println("Serial loop stopped gracefully")
+			case <-time.After(2 * time.Second):
+				log.Println("Warning: Serial loop did not stop within timeout")
+			}
 			return
 
 		case <-ticker.C:
@@ -167,6 +179,10 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 	for {
 		select {
 		case <-ctx.Done():
+			// Graceful shutdown requested
+			if b.parser.frameStarted {
+				log.Printf("Shutdown: discarding partial frame (%d bytes received)", b.parser.byteCounter)
+			}
 			return nil
 		default:
 		}
