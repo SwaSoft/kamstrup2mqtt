@@ -9,18 +9,27 @@ import (
 
 // Config holds all application settings.
 type Config struct {
-	Device   string `json:"device"`
-	Broker   string `json:"broker"`
-	Topic    string `json:"topic"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	ClientID string `json:"client_id"`
-	QoS      *int   `json:"qos,omitempty"`
+	Device      string `json:"device"`
+	Broker      string `json:"broker"`
+	Topic       string `json:"topic"`
+	User        string `json:"user"`
+	Password    string `json:"password"`
+	ClientID    string `json:"client_id"`
+	QoS         *int   `json:"qos,omitempty"`
+	TLSCa       string `json:"tls_ca,omitempty"`
+	TLSCert     string `json:"tls_cert,omitempty"`
+	TLSKey      string `json:"tls_key,omitempty"`
+	TLSInsecure *bool  `json:"tls_insecure,omitempty"`
 }
 
 // intPtr returns a pointer to the given int value.
 func intPtr(i int) *int {
 	return &i
+}
+
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 // DefaultConfig returns a configuration with default values.
@@ -62,7 +71,7 @@ func LoadCredentials(path string) (user, password string, err error) {
 	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), nil
 }
 
-func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, clientID string, qos int) (Config, error) {
+func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, clientID string, qos int, tlsCa, tlsCert, tlsKey string, tlsInsecure int) (Config, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "unknown"
@@ -97,9 +106,15 @@ func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, cl
 		User:     user,
 		Password: pass,
 		ClientID: clientID,
+		TLSCa:    tlsCa,
+		TLSCert:  tlsCert,
+		TLSKey:   tlsKey,
 	}
 	if qos >= 0 {
 		cliFlags.QoS = intPtr(qos)
+	}
+	if tlsInsecure >= 0 {
+		cliFlags.TLSInsecure = boolPtr(tlsInsecure == 1)
 	}
 
 	logic := NewBridgeLogic(0) // InactivityTimeout not needed for merging

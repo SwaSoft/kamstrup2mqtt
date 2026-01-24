@@ -66,6 +66,7 @@ func TestBuildConfig(t *testing.T) {
 		"pass",             // pass flag
 		"client-123",       // clientID flag
 		1,                  // qos flag
+		"", "", "", -1,     // TLS options (not set)
 	)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig: %v", err)
@@ -91,7 +92,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: defaults when no file or flags
-	cfg2, err := buildConfig("", "", "", "", "", "", "", "", -1)
+	cfg2, err := buildConfig("", "", "", "", "", "", "", "", -1, "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig defaults: %v", err)
 	}
@@ -108,13 +109,13 @@ func TestBuildConfig(t *testing.T) {
 	}
 
 	// Test case: Error on missing config file
-	_, err = buildConfig("missing-file.json", "", "", "", "", "", "", "", -1)
+	_, err = buildConfig("missing-file.json", "", "", "", "", "", "", "", -1, "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for missing config file, got nil")
 	}
 
 	// Test case: Error on invalid QoS
-	_, err = buildConfig("", "", "", "", "", "", "", "", 5)
+	_, err = buildConfig("", "", "", "", "", "", "", "", 5, "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for invalid QoS, got nil")
 	}
@@ -140,7 +141,7 @@ func TestBuildConfig(t *testing.T) {
 	}
 	tmpFile2.Close()
 
-	cfg3, err := buildConfig(tmpFile2.Name(), "", "", "", "", "", "", "", -1)
+	cfg3, err := buildConfig(tmpFile2.Name(), "", "", "", "", "", "", "", -1, "", "", "", -1)
 	if err != nil {
 		t.Errorf("unexpected error in buildConfig with all fields: %v", err)
 	}
@@ -272,7 +273,7 @@ func TestCredfilePriority(t *testing.T) {
 	credFile.Close()
 
 	// Test: credfile should override config.json
-	cfg, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "", "", "", -1)
+	cfg, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "", "", "", -1, "", "", "", -1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -284,7 +285,7 @@ func TestCredfilePriority(t *testing.T) {
 	}
 
 	// Test: CLI flags should override credfile
-	cfg2, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "cli-user", "cli-pass", "", -1)
+	cfg2, err := buildConfig(configFile.Name(), credFile.Name(), "", "", "", "cli-user", "cli-pass", "", -1, "", "", "", -1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -296,8 +297,70 @@ func TestCredfilePriority(t *testing.T) {
 	}
 
 	// Test: error on missing credfile
-	_, err = buildConfig("", "missing-creds.txt", "", "", "", "", "", "", -1)
+	_, err = buildConfig("", "missing-creds.txt", "", "", "", "", "", "", -1, "", "", "", -1)
 	if err == nil {
 		t.Error("expected error for missing credentials file")
+	}
+}
+
+func TestTLSConfig(t *testing.T) {
+	// Test: TLS cert without key should fail validation
+	_, err := buildConfig("", "", "", "", "", "", "", "", -1, "", "/path/to/cert.pem", "", -1)
+	if err == nil {
+		t.Error("expected error when tls_cert specified without tls_key")
+	}
+
+	// Test: TLS key without cert should fail validation
+	_, err = buildConfig("", "", "", "", "", "", "", "", -1, "", "", "/path/to/key.pem", -1)
+	if err == nil {
+		t.Error("expected error when tls_key specified without tls_cert")
+	}
+
+	// Test: TLS config from JSON file
+	tmpFile, err := os.CreateTemp("", "config_tls*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	content := `{
+		"broker": "ssl://broker:8883",
+		"tls_ca": "/etc/certs/ca.pem",
+		"tls_cert": "/etc/certs/client.pem",
+		"tls_key": "/etc/certs/client.key",
+		"tls_insecure": false
+	}`
+	if _, err := tmpFile.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	cfg, err := buildConfig(tmpFile.Name(), "", "", "", "", "", "", "", -1, "", "", "", -1)
+	if err != nil {
+		t.Fatalf("unexpected error loading TLS config: %v", err)
+	}
+	if cfg.TLSCa != "/etc/certs/ca.pem" {
+		t.Errorf("expected tls_ca '/etc/certs/ca.pem', got '%s'", cfg.TLSCa)
+	}
+	if cfg.TLSCert != "/etc/certs/client.pem" {
+		t.Errorf("expected tls_cert '/etc/certs/client.pem', got '%s'", cfg.TLSCert)
+	}
+	if cfg.TLSKey != "/etc/certs/client.key" {
+		t.Errorf("expected tls_key '/etc/certs/client.key', got '%s'", cfg.TLSKey)
+	}
+	if cfg.TLSInsecure == nil || *cfg.TLSInsecure != false {
+		t.Errorf("expected tls_insecure false, got %v", cfg.TLSInsecure)
+	}
+
+	// Test: CLI TLS flags override file
+	cfg2, err := buildConfig(tmpFile.Name(), "", "", "", "", "", "", "", -1, "/cli/ca.pem", "", "", 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg2.TLSCa != "/cli/ca.pem" {
+		t.Errorf("expected CLI tls_ca '/cli/ca.pem', got '%s'", cfg2.TLSCa)
+	}
+	if cfg2.TLSInsecure == nil || *cfg2.TLSInsecure != true {
+		t.Errorf("expected CLI tls_insecure true, got %v", cfg2.TLSInsecure)
 	}
 }

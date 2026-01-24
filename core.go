@@ -80,6 +80,18 @@ func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 		if override.QoS != nil {
 			cfg.QoS = override.QoS
 		}
+		if override.TLSCa != "" {
+			cfg.TLSCa = override.TLSCa
+		}
+		if override.TLSCert != "" {
+			cfg.TLSCert = override.TLSCert
+		}
+		if override.TLSKey != "" {
+			cfg.TLSKey = override.TLSKey
+		}
+		if override.TLSInsecure != nil {
+			cfg.TLSInsecure = override.TLSInsecure
+		}
 	}
 
 	return cfg
@@ -92,6 +104,10 @@ func (l *BridgeLogic) ValidateConfig(cfg Config) error {
 	}
 	if *cfg.QoS < 0 || *cfg.QoS > 2 {
 		return fmt.Errorf("invalid QoS level %d (must be 0, 1, or 2)", *cfg.QoS)
+	}
+	// TLS client cert and key must be specified together
+	if (cfg.TLSCert != "") != (cfg.TLSKey != "") {
+		return fmt.Errorf("tls_cert and tls_key must both be specified for client certificate authentication")
 	}
 	return nil
 }

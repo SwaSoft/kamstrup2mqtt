@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log"
@@ -310,6 +312,15 @@ func initMQTT(cfg Config) (mqtt.Client, error) {
 		log.Printf("Lost connection to MQTT broker: %v", err)
 	}
 
+	// Configure TLS if any TLS options are set
+	if cfg.TLSCa != "" || cfg.TLSCert != "" || (cfg.TLSInsecure != nil && *cfg.TLSInsecure) {
+		tlsConfig, err := buildTLSConfig(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("TLS configuration error: %w", err)
+		}
+		opts.SetTLSConfig(tlsConfig)
+	}
+
 	client := mqtt.NewClient(opts)
 	token := client.Connect()
 	if !token.WaitTimeout(MQTTConnTimeout) {
@@ -319,4 +330,39 @@ func initMQTT(cfg Config) (mqtt.Client, error) {
 		return nil, token.Error()
 	}
 	return client, nil
+}
+
+func buildTLSConfig(cfg Config) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	// Load CA certificate if specified
+	if cfg.TLSCa != "" {
+		caCert, err := os.ReadFile(cfg.TLSCa)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA certificate: %w", err)
+		}
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	// Load client certificate and key if specified (for mutual TLS)
+	if cfg.TLSCert != "" && cfg.TLSKey != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	// Set insecure skip verify if specified
+	if cfg.TLSInsecure != nil && *cfg.TLSInsecure {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	return tlsConfig, nil
 }

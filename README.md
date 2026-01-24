@@ -84,6 +84,21 @@ Edit `/etc/kamstrup2mqtt/config.json`:
 }
 ```
 
+For TLS connections, use `ssl://` or `tls://` scheme and add TLS options:
+
+```json
+{
+  "device": "/dev/ttyUSB0",
+  "broker": "ssl://broker.example.com:8883",
+  "topic": "serial/bridge",
+  "client_id": "kamstrup2mqtt",
+  "qos": 0,
+  "tls_ca": "/etc/certs/ca.pem",
+  "tls_cert": "/etc/certs/client.pem",
+  "tls_key": "/etc/certs/client.key"
+}
+```
+
 Restart the service after making changes:
 
 ```bash
@@ -105,6 +120,10 @@ All settings can also be specified via flags, which override the config file:
 | `-pass` | MQTT password | (none) |
 | `-clientid` | MQTT client ID | `kamstrup2mqtt-<hostname>-<pid>` |
 | `-qos` | MQTT QoS level (0, 1, or 2) | `0` |
+| `-tls-ca` | Path to CA certificate for TLS | (none) |
+| `-tls-cert` | Path to client certificate for mutual TLS | (none) |
+| `-tls-key` | Path to client private key for mutual TLS | (none) |
+| `-tls-insecure` | Skip TLS certificate verification (0=no, 1=yes) | (none) |
 
 ### Credentials File
 
