@@ -1,4 +1,4 @@
-package main
+package bridge
 
 import (
 	"context"
@@ -8,6 +8,9 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+
+	"kamstrup2mqtt/internal/config"
+	"kamstrup2mqtt/internal/parser"
 )
 
 func TestCalculateTickerInterval(t *testing.T) {
@@ -131,12 +134,12 @@ func TestShouldLogSerialOpen(t *testing.T) {
 func TestMergeConfigs(t *testing.T) {
 	logic := NewBridgeLogic(60 * time.Second)
 
-	base := Config{Device: "base", Broker: "base-broker", QoS: intPtr(0)}
-	file := Config{Device: "file", Broker: "file-broker"}
-	cli := Config{Device: "cli", QoS: intPtr(1)}
+	base := config.Config{Device: "base", Broker: "base-broker", QoS: intPtr(0)}
+	file := config.Config{Device: "file", Broker: "file-broker"}
+	cli := config.Config{Device: "cli", QoS: intPtr(1)}
 
 	// 1. File only overrides base (file has nil QoS, so base QoS preserved)
-	merged := logic.MergeConfigs(base, file, Config{})
+	merged := logic.MergeConfigs(base, file, config.Config{})
 	if merged.Device != "file" || merged.Broker != "file-broker" || *merged.QoS != 0 {
 		t.Errorf("MergeConfigs (file only) failed: %+v", merged)
 	}
@@ -148,8 +151,8 @@ func TestMergeConfigs(t *testing.T) {
 	}
 
 	// 3. Explicit QoS 0 in override should work
-	cliQoS0 := Config{QoS: intPtr(0)}
-	baseQoS2 := Config{Device: "base", QoS: intPtr(2)}
+	cliQoS0 := config.Config{QoS: intPtr(0)}
+	baseQoS2 := config.Config{Device: "base", QoS: intPtr(2)}
 	merged = logic.MergeConfigs(baseQoS2, cliQoS0)
 	if *merged.QoS != 0 {
 		t.Errorf("MergeConfigs (explicit QoS 0) failed: QoS = %d, want 0", *merged.QoS)
@@ -286,7 +289,7 @@ func (m *mockReader) Read(p []byte) (int, error) {
 
 func TestMetricsBytesReceived(t *testing.T) {
 	b := &Bridge{
-		parser: NewFrameParser(),
+		parser: parser.NewFrameParser(),
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 
@@ -308,7 +311,7 @@ func TestMetricsBytesReceived(t *testing.T) {
 
 func TestMetricsParseErrors(t *testing.T) {
 	b := &Bridge{
-		parser: NewFrameParser(),
+		parser: parser.NewFrameParser(),
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 
@@ -332,10 +335,10 @@ type mockMQTTToken struct {
 	err error
 }
 
-func (m *mockMQTTToken) Wait() bool                       { return true }
-func (m *mockMQTTToken) WaitTimeout(time.Duration) bool   { return true }
-func (m *mockMQTTToken) Done() <-chan struct{}            { ch := make(chan struct{}); close(ch); return ch }
-func (m *mockMQTTToken) Error() error                     { return m.err }
+func (m *mockMQTTToken) Wait() bool                     { return true }
+func (m *mockMQTTToken) WaitTimeout(time.Duration) bool { return true }
+func (m *mockMQTTToken) Done() <-chan struct{}          { ch := make(chan struct{}); close(ch); return ch }
+func (m *mockMQTTToken) Error() error                   { return m.err }
 
 // mockMQTTClient implements mqtt.Client for testing
 type mockMQTTClient struct {
@@ -349,26 +352,26 @@ func (m *mockMQTTClient) Publish(topic string, qos byte, retained bool, payload 
 }
 
 // Implement remaining mqtt.Client interface methods as no-ops
-func (m *mockMQTTClient) IsConnected() bool                                           { return true }
-func (m *mockMQTTClient) IsConnectionOpen() bool                                      { return true }
-func (m *mockMQTTClient) Connect() mqtt.Token                                         { return &mockMQTTToken{} }
-func (m *mockMQTTClient) Disconnect(quiesce uint)                                     {}
+func (m *mockMQTTClient) IsConnected() bool       { return true }
+func (m *mockMQTTClient) IsConnectionOpen() bool  { return true }
+func (m *mockMQTTClient) Connect() mqtt.Token     { return &mockMQTTToken{} }
+func (m *mockMQTTClient) Disconnect(quiesce uint) {}
 func (m *mockMQTTClient) Subscribe(topic string, qos byte, callback mqtt.MessageHandler) mqtt.Token {
 	return &mockMQTTToken{}
 }
 func (m *mockMQTTClient) SubscribeMultiple(filters map[string]byte, callback mqtt.MessageHandler) mqtt.Token {
 	return &mockMQTTToken{}
 }
-func (m *mockMQTTClient) Unsubscribe(topics ...string) mqtt.Token { return &mockMQTTToken{} }
+func (m *mockMQTTClient) Unsubscribe(topics ...string) mqtt.Token             { return &mockMQTTToken{} }
 func (m *mockMQTTClient) AddRoute(topic string, callback mqtt.MessageHandler) {}
-func (m *mockMQTTClient) OptionsReader() mqtt.ClientOptionsReader { return mqtt.ClientOptionsReader{} }
+func (m *mockMQTTClient) OptionsReader() mqtt.ClientOptionsReader             { return mqtt.ClientOptionsReader{} }
 
 func TestMetricsFramesPublished(t *testing.T) {
 	mockClient := &mockMQTTClient{}
 	b := &Bridge{
-		parser: NewFrameParser(),
+		parser: parser.NewFrameParser(),
 		mqtt:   mockClient,
-		config: Config{Topic: "test/topic", QoS: intPtr(0)},
+		config: config.Config{Topic: "test/topic", QoS: intPtr(0)},
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 
@@ -405,9 +408,9 @@ func TestMetricsFramesPublished(t *testing.T) {
 func TestMetricsMQTTPublishFails(t *testing.T) {
 	mockClient := &mockMQTTClient{publishErr: io.ErrUnexpectedEOF}
 	b := &Bridge{
-		parser: NewFrameParser(),
+		parser: parser.NewFrameParser(),
 		mqtt:   mockClient,
-		config: Config{Topic: "test/topic", QoS: intPtr(0)},
+		config: config.Config{Topic: "test/topic", QoS: intPtr(0)},
 	}
 	b.metrics.frameSizeMin.Store(math.MaxUint64)
 

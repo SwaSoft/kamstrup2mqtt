@@ -1,8 +1,10 @@
-package main
+package bridge
 
 import (
 	"fmt"
 	"time"
+
+	"kamstrup2mqtt/internal/config"
 )
 
 // BridgeLogic contains the pure business logic for the bridge.
@@ -55,7 +57,7 @@ func (l *BridgeLogic) ShouldLogSerialOpen(firstAttempt bool, currentBackoff time
 // MergeConfigs applies overrides to a base configuration in order.
 // Later configs take precedence over earlier ones.
 // For QoS, -1 is treated as "not set" and won't override.
-func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
+func (l *BridgeLogic) MergeConfigs(base config.Config, overrides ...config.Config) config.Config {
 	cfg := base
 
 	for _, override := range overrides {
@@ -98,7 +100,7 @@ func (l *BridgeLogic) MergeConfigs(base Config, overrides ...Config) Config {
 }
 
 // ValidateConfig checks if the configuration is valid.
-func (l *BridgeLogic) ValidateConfig(cfg Config) error {
+func (l *BridgeLogic) ValidateConfig(cfg config.Config) error {
 	if cfg.QoS == nil {
 		return fmt.Errorf("QoS level not set")
 	}

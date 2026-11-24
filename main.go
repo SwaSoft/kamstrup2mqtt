@@ -3,11 +3,74 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"kamstrup2mqtt/internal/bridge"
+	"kamstrup2mqtt/internal/config"
 )
+
+// buildConfig merges defaults, the config file, the credentials file and CLI flags
+// (in increasing order of precedence) and validates the result.
+func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, clientID string, qos int, tlsCa, tlsCert, tlsKey string, tlsInsecure int) (config.Config, error) {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	pid := os.Getpid()
+
+	base := config.DefaultConfig(hostname, pid)
+
+	var fileCfg config.Config
+	if configPath != "" {
+		var err error
+		fileCfg, err = config.LoadConfig(configPath)
+		if err != nil {
+			return base, fmt.Errorf("error loading config file: %v", err)
+		}
+	}
+
+	var credCfg config.Config
+	if credfilePath != "" {
+		credUser, credPass, err := config.LoadCredentials(credfilePath)
+		if err != nil {
+			return base, fmt.Errorf("error loading credentials: %v", err)
+		}
+		credCfg.User = credUser
+		credCfg.Password = credPass
+	}
+
+	cliFlags := config.Config{
+		Device:   device,
+		Broker:   broker,
+		Topic:    topic,
+		User:     user,
+		Password: pass,
+		ClientID: clientID,
+		TLSCa:    tlsCa,
+		TLSCert:  tlsCert,
+		TLSKey:   tlsKey,
+	}
+	if qos >= 0 {
+		cliFlags.QoS = &qos
+	}
+	if tlsInsecure >= 0 {
+		insecure := tlsInsecure == 1
+		cliFlags.TLSInsecure = &insecure
+	}
+
+	logic := bridge.NewBridgeLogic(0) // InactivityTimeout not needed for merging
+	cfg := logic.MergeConfigs(base, fileCfg, credCfg, cliFlags)
+
+	if err := logic.ValidateConfig(cfg); err != nil {
+		return cfg, err
+	}
+
+	return cfg, nil
+}
 
 func main() {
 	// Detect if running under systemd (journald handles timestamps)
@@ -38,7 +101,7 @@ func main() {
 	}
 
 	// 2. Initialize MQTT
-	client, err := initMQTT(cfg)
+	client, err := bridge.InitMQTT(cfg)
 	if err != nil {
 		log.Fatalf("Fatal error connecting to MQTT: %v", err)
 	}
@@ -52,6 +115,6 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// 4. Start Bridge
-	bridge := NewBridge(cfg, client)
-	bridge.Start(ctx, cancel, sigChan)
+	b := bridge.NewBridge(cfg, client)
+	b.Start(ctx, cancel, sigChan)
 }
