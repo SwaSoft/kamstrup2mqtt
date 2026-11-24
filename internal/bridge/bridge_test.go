@@ -1,4 +1,4 @@
-package main
+package bridge
 
 import (
 	"bytes"
@@ -12,7 +12,27 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+
+	"kamstrup2mqtt/internal/config"
+	"kamstrup2mqtt/internal/parser"
 )
+
+// mkFrame builds a frame of total size n (delimiters at both ends).
+func mkFrame(n int) []byte {
+	length := n - 2
+	f := make([]byte, n)
+	f[0] = parser.Delimiter
+	f[1] = byte(length >> 8 & 0x0F)
+	f[2] = byte(length & 0xFF)
+	for i := 3; i < n-1; i++ {
+		f[i] = 0x01
+	}
+	f[n-1] = parser.Delimiter
+	return f
+}
+
+func intPtr(i int) *int    { return &i }
+func boolPtr(b bool) *bool { return &b }
 
 // fakeToken is a completed mqtt.Token.
 type fakeToken struct {
@@ -50,7 +70,7 @@ func (c *fakeClient) count() int {
 }
 
 func testBridge(client mqtt.Client) *Bridge {
-	cfg := DefaultConfig("host", 1)
+	cfg := config.DefaultConfig("host", 1)
 	cfg.Device = "/nonexistent/kamstrup-test-device"
 	cfg.Topic = "test/topic"
 	cfg.QoS = intPtr(1)
@@ -80,7 +100,7 @@ func TestNewBridge_Initial(t *testing.T) {
 func TestHandleSerialConnection_PublishesFramesAndMetrics(t *testing.T) {
 	fc := &fakeClient{}
 	b := testBridge(fc)
-	f1, f2 := mkFrame(MinPacketSize), mkFrame(MinPacketSize+10)
+	f1, f2 := mkFrame(parser.MinPacketSize), mkFrame(parser.MinPacketSize+10)
 	data := append(append([]byte{}, f1...), f2...)
 
 	if err := b.handleSerialConnection(context.Background(), bytes.NewReader(data)); err != nil {
@@ -111,9 +131,9 @@ func TestHandleSerialConnection_PublishesFramesAndMetrics(t *testing.T) {
 func TestHandleSerialConnection_ParseErrorsAndPublishFailures(t *testing.T) {
 	fc := &fakeClient{publishEr: errors.New("boom")}
 	b := testBridge(fc)
-	bad := mkFrame(MinPacketSize)
+	bad := mkFrame(parser.MinPacketSize)
 	bad[len(bad)-1] = 0x00 // malformed end
-	data := append(append([]byte{}, bad...), mkFrame(MinPacketSize)...)
+	data := append(append([]byte{}, bad...), mkFrame(parser.MinPacketSize)...)
 
 	if err := b.handleSerialConnection(context.Background(), bytes.NewReader(data)); err != nil {
 		t.Fatal(err)
@@ -143,7 +163,7 @@ func TestHandleSerialConnection_ReadErrorAndCancel(t *testing.T) {
 
 	// EOF mid-frame is not an error.
 	b.parser.Reset()
-	if err := b.handleSerialConnection(context.Background(), bytes.NewReader(mkFrame(MinPacketSize)[:5])); err != nil {
+	if err := b.handleSerialConnection(context.Background(), bytes.NewReader(mkFrame(parser.MinPacketSize)[:5])); err != nil {
 		t.Errorf("EOF err = %v", err)
 	}
 
@@ -180,13 +200,13 @@ func TestCheckInactivityAndMetricsDump(t *testing.T) {
 }
 
 func TestBuildTLSConfig(t *testing.T) {
-	cfg := DefaultConfig("host", 1)
+	cfg := config.DefaultConfig("host", 1)
 	cfg.TLSInsecure = boolPtr(true)
 	tc, err := buildTLSConfig(cfg)
 	if err != nil || !tc.InsecureSkipVerify {
 		t.Errorf("insecure: %v %v", tc, err)
 	}
-	cfg = DefaultConfig("host", 1)
+	cfg = config.DefaultConfig("host", 1)
 	cfg.TLSCa = "/nonexistent/ca.pem"
 	if _, err := buildTLSConfig(cfg); err == nil {
 		t.Error("expected error for missing CA")
@@ -199,7 +219,7 @@ func TestBuildTLSConfig(t *testing.T) {
 	if _, err := buildTLSConfig(cfg); err == nil {
 		t.Error("expected error for invalid CA")
 	}
-	cfg = DefaultConfig("host", 1)
+	cfg = config.DefaultConfig("host", 1)
 	cfg.TLSCert, cfg.TLSKey = "/nonexistent/c", "/nonexistent/k"
 	if _, err := buildTLSConfig(cfg); err == nil {
 		t.Error("expected error for missing keypair")

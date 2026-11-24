@@ -1,4 +1,5 @@
-package main
+// Package parser implements serial frame parsing. It is pure and performs no I/O.
+package parser
 
 import (
 	"fmt"
@@ -23,6 +24,16 @@ func NewFrameParser() *FrameParser {
 	return &FrameParser{
 		frameBuffer: make([]byte, 0, MaxPacketSize),
 	}
+}
+
+// FrameStarted reports whether a frame is currently being assembled.
+func (p *FrameParser) FrameStarted() bool {
+	return p.frameStarted
+}
+
+// ByteCounter returns the number of bytes received in the current frame.
+func (p *FrameParser) ByteCounter() int {
+	return p.byteCounter
 }
 
 // Reset clears the current parsing state.

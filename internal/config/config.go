@@ -1,4 +1,5 @@
-package main
+// Package config holds the application configuration and its loading from files.
+package config
 
 import (
 	"encoding/json"
@@ -69,60 +70,4 @@ func LoadCredentials(path string) (user, password string, err error) {
 	}
 
 	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), nil
-}
-
-func buildConfig(configPath, credfilePath, device, broker, topic, user, pass, clientID string, qos int, tlsCa, tlsCert, tlsKey string, tlsInsecure int) (Config, error) {
-	hostname, _ := os.Hostname()
-	if hostname == "" {
-		hostname = "unknown"
-	}
-	pid := os.Getpid()
-
-	base := DefaultConfig(hostname, pid)
-
-	var fileCfg Config
-	if configPath != "" {
-		var err error
-		fileCfg, err = LoadConfig(configPath)
-		if err != nil {
-			return base, fmt.Errorf("error loading config file: %v", err)
-		}
-	}
-
-	var credCfg Config
-	if credfilePath != "" {
-		credUser, credPass, err := LoadCredentials(credfilePath)
-		if err != nil {
-			return base, fmt.Errorf("error loading credentials: %v", err)
-		}
-		credCfg.User = credUser
-		credCfg.Password = credPass
-	}
-
-	cliFlags := Config{
-		Device:   device,
-		Broker:   broker,
-		Topic:    topic,
-		User:     user,
-		Password: pass,
-		ClientID: clientID,
-		TLSCa:    tlsCa,
-		TLSCert:  tlsCert,
-		TLSKey:   tlsKey,
-	}
-	if qos >= 0 {
-		cliFlags.QoS = intPtr(qos)
-	}
-	if tlsInsecure >= 0 {
-		cliFlags.TLSInsecure = boolPtr(tlsInsecure == 1)
-	}
-
-	logic := NewBridgeLogic(0) // InactivityTimeout not needed for merging
-	cfg := logic.MergeConfigs(base, fileCfg, credCfg, cliFlags)
-
-	if err := logic.ValidateConfig(cfg); err != nil {
-		return cfg, err
-	}
-
-	return cfg, nil
 }

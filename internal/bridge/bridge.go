@@ -1,4 +1,6 @@
-package main
+// Package bridge bridges serial frames to MQTT: BridgeLogic is the pure decision
+// logic (functional core) and Bridge performs the serial and MQTT I/O (imperative shell).
+package bridge
 
 import (
 	"context"
@@ -15,14 +17,17 @@ import (
 	"github.com/coreos/go-systemd/v22/daemon"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tarm/serial"
+
+	"kamstrup2mqtt/internal/config"
+	"kamstrup2mqtt/internal/parser"
 )
 
 // Bridge-related constants
 const (
-	InactivityTimeout    = 60 * time.Second
-	MQTTConnTimeout      = 30 * time.Second
-	SerialReadBufSize    = 256
-	MetricsDumpInterval  = 24 * time.Hour
+	InactivityTimeout   = 60 * time.Second
+	MQTTConnTimeout     = 30 * time.Second
+	SerialReadBufSize   = 256
+	MetricsDumpInterval = 24 * time.Hour
 )
 
 // Metrics tracks operational statistics for the bridge.
@@ -40,9 +45,9 @@ type Metrics struct {
 
 // Bridge encapsulates the serial-to-MQTT bridging logic (Imperative Shell).
 type Bridge struct {
-	config                Config
+	config                config.Config
 	mqtt                  mqtt.Client
-	parser                *FrameParser
+	parser                *parser.FrameParser
 	logic                 *BridgeLogic
 	lastActivity          atomic.Int64
 	lastInactivityWarning time.Time
@@ -53,12 +58,12 @@ type Bridge struct {
 }
 
 // NewBridge creates a new Bridge instance.
-func NewBridge(cfg Config, client mqtt.Client) *Bridge {
+func NewBridge(cfg config.Config, client mqtt.Client) *Bridge {
 	now := time.Now()
 	b := &Bridge{
 		config:          cfg,
 		mqtt:            client,
-		parser:          NewFrameParser(),
+		parser:          parser.NewFrameParser(),
 		logic:           NewBridgeLogic(InactivityTimeout),
 		lastMetricsDump: now,
 	}
@@ -180,8 +185,8 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 		select {
 		case <-ctx.Done():
 			// Graceful shutdown requested
-			if b.parser.frameStarted {
-				log.Printf("Shutdown: discarding partial frame (%d bytes received)", b.parser.byteCounter)
+			if b.parser.FrameStarted() {
+				log.Printf("Shutdown: discarding partial frame (%d bytes received)", b.parser.ByteCounter())
 			}
 			return nil
 		default:
@@ -193,7 +198,7 @@ func (b *Bridge) handleSerialConnection(ctx context.Context, s io.Reader) error 
 		}
 		if err != nil {
 			if err == io.EOF {
-				if b.parser.frameStarted {
+				if b.parser.FrameStarted() {
 					log.Println("Warning: Serial timeout/EOF inside frame, discarding partial data")
 				}
 				return nil
@@ -316,7 +321,8 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dh %dm %ds", h, m, s)
 }
 
-func initMQTT(cfg Config) (mqtt.Client, error) {
+// InitMQTT creates an MQTT client from cfg and connects it to the broker.
+func InitMQTT(cfg config.Config) (mqtt.Client, error) {
 	opts := mqtt.NewClientOptions().AddBroker(cfg.Broker).SetUsername(cfg.User).SetPassword(cfg.Password)
 	opts.SetClientID(cfg.ClientID)
 	opts.SetAutoReconnect(true)
@@ -348,7 +354,7 @@ func initMQTT(cfg Config) (mqtt.Client, error) {
 	return client, nil
 }
 
-func buildTLSConfig(cfg Config) (*tls.Config, error) {
+func buildTLSConfig(cfg config.Config) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
